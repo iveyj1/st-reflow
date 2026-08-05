@@ -24,7 +24,9 @@ The two conflicts in the first upstream merge retained the reflow patch's altern
 
 Xresources are loaded at startup. The patch's `SIGUSR1` runtime reload was deliberately omitted because its signal handler called Xlib and allocator functions that are not async-signal-safe.
 
-Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented.
+Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented. Modern Vim capability probes are answered or ignored without diagnostics, and `CSI 3 J` clears inaccessible scrollback as specified by xterm.
+
+A local reflow fix handles readline-style `CR + EL` redraws after `SIGWINCH`. It detaches reflowed prompt-prefix rows before the application replaces its active line, preventing a later widening from joining the stale and replacement prompts and mapping the cursor into the duplicated text.
 
 ## Deliberately omitted
 
@@ -33,7 +35,6 @@ Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather tha
 - Vim-style browse mode
 - External pipe and URL/output helpers
 - Close-warning dialog
-- Clear-history behavior beyond the foundation patch
 
 Stock fontconfig fallback is used. The preferred primary font is `DroidSansM Nerd Font Mono`.
 
