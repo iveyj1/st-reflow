@@ -1972,6 +1972,13 @@ csihandle(void)
                 tscrollup(0, term.row-1, n+1, SCROLL_SAVEHIST);
             tscrollup(0, term.row-1, term.row-n-1, SCROLL_NOSAVEHIST);
 			break;
+		case 3: /* saved lines (xterm) */
+			term.histf = 0;
+			term.scr = 0;
+			if (!sel.alt)
+				selremove();
+			tfulldirt();
+			break;
 		default:
 			goto unknown;
 		}
