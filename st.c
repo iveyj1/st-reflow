@@ -262,6 +262,8 @@ static ssize_t xwrite(int, const char *, size_t);
 /* Globals */
 static Term term;
 static Selection sel;
+/* A CR immediately after reflow indicates an application-line redraw. */
+static int reflowredrawpending;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
@@ -2464,6 +2466,25 @@ tcontrolcode(uchar ascii)
 		tmoveto(term.c.x-1, term.c.y);
 		return;
 	case '\r':   /* CR */
+		/*
+		 * Readline and similar applications redraw their active line after
+		 * SIGWINCH using CR + EL. If reflow moved the line's prefix above
+		 * the cursor, keeping that soft-wrap link would join the old prefix
+		 * to the replacement line on the next resize.
+		 */
+		if (reflowredrawpending) {
+			int y;
+
+			/* Detach every reflowed prefix row the redraw may replace. */
+			for (y = term.c.y - 1; y >= -term.histf; y--) {
+				Line prev = TLINEABS(y);
+
+				if (!(prev[term.col - 1].mode & ATTR_WRAP))
+					break;
+				prev[term.col - 1].mode &= ~ATTR_WRAP;
+			}
+			reflowredrawpending = 0;
+		}
 		tmoveto(0, term.c.y);
 		return;
 	case '\f':   /* LF */
@@ -2745,6 +2766,8 @@ check_control_code:
 		 */
 		return;
 	}
+
+	reflowredrawpending = 0;
 
     /* selected() takes relative coordinates */
 	if (selected(term.c.x + term.scr, term.c.y + term.scr))
@@ -3097,6 +3120,17 @@ treflow(int col, int row)
     }
     term.histf = -i - 1;
     term.scr = MIN(term.scr, term.histf);
+
+    /* Remember when the cursor line has a reflowed prefix above it. */
+    reflowredrawpending = 0;
+    if (term.c.y > 0) {
+        reflowredrawpending =
+            (term.line[term.c.y - 1][col - 1].mode & ATTR_WRAP) != 0;
+    } else if (term.histf > 0) {
+        reflowredrawpending =
+            (TLINEABS(-1)[col - 1].mode & ATTR_WRAP) != 0;
+    }
+
     /* resize rest of the history lines */
     for (/*i = -term.histf - 1 */; i >= -HISTSIZE; i--) {
         j = (term.histi + i + 1 + HISTSIZE) % HISTSIZE;
