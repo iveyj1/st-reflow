@@ -1375,10 +1375,8 @@ csiparse(void)
 	int sep = ';'; /* colon or semi-colon, but not both */
 
 	csiescseq.narg = 0;
-	if (*p == '?') {
-		csiescseq.priv = 1;
-		p++;
-	}
+	if (BETWEEN(*p, '<', '?'))
+		csiescseq.priv = *p++;
 
 	csiescseq.buf[csiescseq.len] = '\0';
 	while (p < csiescseq.buf+csiescseq.len) {
@@ -2042,7 +2040,9 @@ csihandle(void)
 		tsetmode(csiescseq.priv, 1, csiescseq.arg, csiescseq.narg);
 		break;
 	case 'm': /* SGR -- Terminal attribute (color) */
-		tsetattr(csiescseq.arg, csiescseq.narg);
+		/* Ignore unsupported private modes such as modifyOtherKeys. */
+		if (!csiescseq.priv)
+			tsetattr(csiescseq.arg, csiescseq.narg);
 		break;
 	case 'n': /* DSR -- Device Status Report */
 		switch (csiescseq.arg[0]) {
@@ -2071,11 +2071,21 @@ csihandle(void)
 	case 's': /* DECSC -- Save cursor position (ANSI.SYS) */
 		tcursor(CURSOR_SAVE);
 		break;
-	case 'u': /* DECRC -- Restore cursor position (ANSI.SYS) */
-		if (csiescseq.priv) {
-			goto unknown;
-		} else {
+	case 'u': /* DECRC or keyboard protocol control */
+		if (csiescseq.priv == '?')
+			ttywrite("\033[?0u", sizeof("\033[?0u") - 1, 0);
+		else if (!csiescseq.priv)
 			tcursor(CURSOR_LOAD);
+		/* Ignore unsupported '<' and '>' keyboard stack controls. */
+		break;
+	case '$': /* DECRQM -- Request Mode */
+		if (csiescseq.mode[1] == 'p') {
+			n = snprintf(buf, sizeof(buf), "\033[%s%i;0$y",
+			             csiescseq.priv == '?' ? "?" : "",
+			             csiescseq.arg[0]);
+			ttywrite(buf, n, 0);
+		} else {
+			goto unknown;
 		}
 		break;
 	case ' ':
