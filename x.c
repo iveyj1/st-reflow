@@ -173,6 +173,8 @@ static void xunloadfont(Font *);
 static void xunloadfonts(void);
 static void xsetenv(void);
 static void xseturgency(int);
+static void xdrawsplash(void);
+static void xsplashhide(void);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
 
@@ -270,6 +272,8 @@ static char *opt_title = NULL;
 
 static uint buttons; /* bit field of pressed buttons */
 static int focused;
+static int splashvisible;
+static struct timespec splashstart;
 
 void
 clipcopy(const Arg *dummy)
@@ -489,6 +493,7 @@ bpress(XEvent *e)
 	struct timespec now;
 	int snap;
 
+	xsplashhide();
 	if (1 <= btn && btn <= 11)
 		buttons |= 1 << (btn-1);
 
@@ -1288,6 +1293,10 @@ xinit(int cols, int rows)
 		xsel.xtarget = XA_STRING;
 
 	boxdraw_xinit(xw.dpy, xw.cmap, xw.draw, xw.vis);
+
+	splashvisible = splashtext && splashtext[0] && splashtimeout && !opt_embed;
+	if (splashvisible)
+		clock_gettime(CLOCK_MONOTONIC, &splashstart);
 }
 
 int
@@ -1738,9 +1747,39 @@ xdrawline(Line line, int x1, int y1, int x2)
 		xdrawglyphfontspecs(specs, base, i, ox, y1);
 }
 
+static void
+xdrawsplash(void)
+{
+	XGlyphInfo ext;
+	XftColor *color;
+	int len, x, y;
+
+	if (!splashvisible)
+		return;
+
+	len = strlen(splashtext);
+	XftTextExtentsUtf8(xw.dpy, dc.font.match, (const FcChar8 *)splashtext,
+	                   len, &ext);
+	color = &dc.col[splashcolor < dc.collen ? splashcolor : defaultfg];
+	x = MAX(win.hborderpx, win.w - win.hborderpx - ext.xOff - win.cw / 2);
+	y = win.h - win.vborderpx - dc.font.descent;
+	XftDrawStringUtf8(xw.draw, color, dc.font.match, x, y,
+	                  (const FcChar8 *)splashtext, len);
+}
+
+static void
+xsplashhide(void)
+{
+	if (!splashvisible)
+		return;
+	splashvisible = 0;
+	redraw();
+}
+
 void
 xfinishdraw(void)
 {
+	xdrawsplash();
 	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
 			win.h, 0, 0);
 	XSetForeground(xw.dpy, dc.gc,
@@ -1912,6 +1951,7 @@ kpress(XEvent *ev)
 	Status status;
 	Shortcut *bp;
 
+	xsplashhide();
 	if (IS_SET(MODE_KBDLOCK))
 		return;
 
@@ -2044,6 +2084,12 @@ run(void)
 				(handler[ev.type])(&ev);
 		}
 
+		if (splashvisible &&
+		    TIMEDIFF(now, splashstart) >= splashtimeout) {
+			splashvisible = 0;
+			redraw();
+		}
+
 		/*
 		 * To reduce flicker and tearing, when new content or event
 		 * triggers drawing, we first wait a bit to ensure we got
@@ -2078,6 +2124,12 @@ run(void)
 				lastblink = now;
 				timeout = blinktimeout;
 			}
+		}
+		if (splashvisible) {
+			double remain = splashtimeout - TIMEDIFF(now, splashstart);
+
+			if (timeout < 0 || remain < timeout)
+				timeout = MAX(remain, 0);
 		}
 
 		draw();

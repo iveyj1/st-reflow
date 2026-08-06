@@ -8,6 +8,11 @@
 static char *font = "DroidSansM Nerd Font Mono:size=15:antialias=true:autohint=true";
 static int borderpx = 2;
 
+/* Brief X overlay; it is never written to terminal history. */
+static const char *splashtext = "st-reflow 0.1 · 2026-08-06";
+static unsigned int splashtimeout = 900;
+static unsigned int splashcolor = 8;
+
 /*
  * What program is execed by st depends of these precedence rules:
  * 1: program passed with -e

@@ -18,6 +18,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - Startup Xresources loading
 - No-bright-on-bold
 - Boxdraw rendering
+- Brief, history-free version/date splash overlay
 - Vim-compatible `CSI 3 J` and modern capability-probe handling
 - Stock fontconfig fallback, without Font2 or HarfBuzz
 
@@ -72,6 +73,7 @@ The default prefix is `/usr/local`. Existing terminal processes continue running
 - Focused opacity: `0.8`
 - Unfocused opacity: `0.5`
 - History capacity: 2000 physical rows
+- Splash: `st-reflow 0.1 · 2026-08-06`, 900 ms, dim color 8
 - Colors: Gruvbox-derived dark palette
 
 Stock fontconfig fallback is used for symbols and emoji. The DroidSansM font is a preference, not a functional dependency; change `font` in `config.def.h` on systems where it is unavailable.
@@ -110,6 +112,12 @@ st.borderpx: 2
 Colors `st.color0` through `st.color15` and several latency, geometry, and terminal settings are also supported; see the `resources` table in `config.def.h`.
 
 Runtime `SIGUSR1` reload was omitted because the available patch called Xlib and allocator functions from a signal handler, which is not async-signal-safe.
+
+## Splash overlay
+
+The startup label is drawn directly with Xft in the lower-right corner. It is not sent through the pseudoterminal and can never enter scrollback or reflowed text. It disappears after 900 ms or immediately on keyboard/mouse input; hiding it forces a complete redraw so no pixmap remnants remain. Embedded windows (`-w`) do not show it.
+
+Update `splashtext` in `config.def.h` when assigning a new release version or date. Set `splashtimeout` to `0` to disable it.
 
 ## Branches
 

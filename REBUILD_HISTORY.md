@@ -37,6 +37,7 @@ Each functional addition was kept in a separate commit and built before continui
 8. Boxdraw
 9. `CSI 3 J` erase-saved-lines handling
 10. Modern Vim terminal capability handling
+11. A temporary Xft version/date splash that never enters terminal history
 
 Font2 and HarfBuzz were intentionally omitted. DroidSansM is the preferred primary font, while stock fontconfig fallback handles other glyphs.
 
@@ -124,6 +125,10 @@ Automated and manual work has included:
 - `CSI 3 J` handling
 
 AddressSanitizer/UBSan testing was attempted but the machine lacked the ASan runtime (`libasan`). No sanitizer result is claimed.
+
+## Splash overlay
+
+The inconspicuous startup label is an Xft overlay on the X backing pixmap, not terminal output. It is drawn in the lower-right corner using a dim palette color, expires through the monotonic event-loop timer, and is dismissed by keyboard or mouse input. Dismissal forces a full terminal redraw to remove the overlay cleanly. The version/date string is maintained explicitly in `config.def.h` for reproducible builds.
 
 ## Known limitations and risks
 
