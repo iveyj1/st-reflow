@@ -26,6 +26,12 @@ Xresources are loaded at startup. The patch's `SIGUSR1` runtime reload was delib
 
 Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented. Modern Vim capability probes are answered or ignored without diagnostics, and `CSI 3 J` clears inaccessible scrollback as specified by xterm.
 
+## Active-line repaint experiment
+
+The `reflow-skip-active-line` branch defaults `reflowactive` to `0`. Completed output and history reflow normally, but when the original terminal child owns the foreground process group, the cursor-containing logical line is cleared after its cursor has been mapped. Readline then repaints that line after `SIGWINCH` without stale prompt copies entering history. Set `reflowactive` to `1` for the standard patch behavior.
+
+This deliberately trades preservation of an uncompleted foreground-shell line for reliable interactive prompt redraw. Full-screen child applications have their own foreground process groups and retain the standard alternate-screen behavior.
+
 ## Deliberately omitted
 
 - Font2

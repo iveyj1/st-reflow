@@ -3003,13 +3003,15 @@ void
 treflow(int col, int row)
 {
     int i, j;
-    int oce, nce, bot, scr;
+    int oce, ocs, nce, bot, scr;
     int ox = 0, oy = -term.histf, nx = 0, ny = -1, len;
-    int cy = -1; /* proxy for new y coordinate of cursor */
+    int cstart = -1, cend, cy = -1; /* cursor logical-line mapping */
     int nlines;
     Line *buf, line;
 
-    /* y coordinate of cursor line end */
+    /* coordinates of the cursor's logical line */
+    for (ocs = term.c.y; ocs > -term.histf &&
+            tiswrapped(TLINEABS(ocs - 1)); ocs--);
     for (oce = term.c.y; oce < term.row - 1 &&
             tiswrapped(term.line[oce]); oce++);
 
@@ -3027,6 +3029,8 @@ treflow(int col, int row)
     do {
         if (!nx)
             buf[++ny] = xmalloc(col * sizeof(Glyph));
+        if (cstart < 0 && oy >= ocs)
+            cstart = ny;
         if (!ox) {
             line = TLINEABS(oy);
             len = tlinelen(line);
@@ -3065,6 +3069,9 @@ treflow(int col, int row)
     if (nx)
         for (j = nx; j < col; j++)
             tclearglyph(&buf[ny][j], 0);
+    if (cstart < 0)
+        cstart = 0;
+    cend = ny;
 
     /* free extra lines */
     for (i = row; i < term.row; i++)
@@ -3107,6 +3114,22 @@ treflow(int col, int row)
     }
     term.histf = -i - 1;
     term.scr = MIN(term.scr, term.histf);
+
+    /*
+     * Interactive line editors repaint after SIGWINCH. Keeping their old
+     * reflowed line makes each repaint part of history, so later resizes join
+     * stale prompts into completed output. Clear only the active logical line
+     * and leave the mapped cursor in place for the application repaint.
+     */
+    if (!reflowactive && tcgetpgrp(cmdfd) == pid) {
+        int start = MAX(term.c.y + cstart - cy, -term.histf);
+        int end = MIN(term.c.y + cend - cy, row - 1);
+
+        for (i = start; i <= end; i++)
+            for (j = 0; j < col; j++)
+                tclearglyph(&TLINEABS(i)[j], 0);
+    }
+
     /* resize rest of the history lines */
     for (/*i = -term.histf - 1 */; i >= -HISTSIZE; i--) {
         j = (term.histi + i + 1 + HISTSIZE) % HISTSIZE;
