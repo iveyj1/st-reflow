@@ -26,8 +26,6 @@ Xresources are loaded at startup. The patch's `SIGUSR1` runtime reload was delib
 
 Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented. Modern Vim capability probes are answered or ignored without diagnostics, and `CSI 3 J` clears inaccessible scrollback as specified by xterm.
 
-A local reflow fix handles readline-style `CR + EL` redraws after `SIGWINCH`. It detaches reflowed prompt-prefix rows before the application replaces its active line, preventing a later widening from joining the stale and replacement prompts and mapping the cursor into the duplicated text.
-
 ## Deliberately omitted
 
 - Font2
