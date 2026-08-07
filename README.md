@@ -19,6 +19,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - No-bright-on-bold
 - Boxdraw rendering
 - Brief, history-free version/date splash overlay
+- Dependency-free Alt-F4/process-close warning overlay
 - Vim-compatible `CSI 3 J` and modern capability-probe handling
 - Stock fontconfig fallback, without Font2 or HarfBuzz
 
@@ -94,6 +95,19 @@ Stock fontconfig fallback is used for symbols and emoji. The DroidSansM font is 
 | Mouse wheel | Scroll four history rows |
 | `Ctrl` + mouse wheel | Change font size |
 | Middle click | Paste primary selection |
+| `Alt+F4` | Close immediately when idle; require a second press when a process is running |
+
+## Close warning
+
+When no descendant process is running, `Alt+F4` and a window-manager close request exit immediately. If a process is still running, st displays:
+
+```text
+process still running · Alt-F4 again to close · Esc to cancel
+```
+
+A second `Alt+F4` or close request within four seconds confirms. `Esc` cancels and is consumed; mouse or ordinary keyboard input cancels while continuing normally. The warning is an internal Xft overlay, so it has no dmenu or shell-command dependency and never enters terminal history.
+
+On Linux, activity detection scans `/proc` for live descendants of the terminal shell, including background jobs. Other systems use the foreground terminal process group as a portable fallback.
 
 ## Xresources
 
@@ -115,7 +129,7 @@ Runtime `SIGUSR1` reload was omitted because the available patch called Xlib and
 
 ## Splash overlay
 
-The startup label is drawn directly with Xft in the lower-right corner. It is not sent through the pseudoterminal and can never enter scrollback or reflowed text. It disappears after 900 ms or immediately on keyboard/mouse input; hiding it forces a complete redraw so no pixmap remnants remain. Embedded windows (`-w`) do not show it.
+The startup label is drawn directly with Xft in the lower-right corner. It is not sent through the pseudoterminal and can never enter scrollback or reflowed text. It disappears after 900 ms or immediately on keyboard/mouse input; hiding it forces a complete redraw so no pixmap remnants remain. Embedded windows (`-w`) do not show it. The close warning reuses the same rendering and monotonic-timer mechanism.
 
 Update `splashtext` in `config.def.h` when assigning a new release version or date. Set `splashtimeout` to `0` to disable it.
 

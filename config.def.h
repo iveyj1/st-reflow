@@ -13,6 +13,12 @@ static const char *splashtext = "st-reflow 0.1 · 2026-08-06";
 static unsigned int splashtimeout = 900;
 static unsigned int splashcolor = 8;
 
+/* Nonblocking close confirmation shown when a child process is still alive. */
+static const char *closewarningtext =
+	"process still running · Alt-F4 again to close · Esc to cancel";
+static unsigned int closewarningtimeout = 4000;
+static unsigned int closewarningcolor = 3;
+
 /*
  * What program is execed by st depends of these precedence rules:
  * 1: program passed with -e
@@ -214,6 +220,7 @@ static MouseShortcut mshortcuts[] = {
 
 static Shortcut shortcuts[] = {
 	/* mask                 keysym          function        argument */
+	{ MODKEY,               XK_F4,          requestclose,   {.i =  0} },
 	{ XK_ANY_MOD,           XK_Break,       sendbreak,      {.i =  0} },
 	{ ControlMask,          XK_Print,       toggleprinter,  {.i =  0} },
 	{ ShiftMask,            XK_Print,       printscreen,    {.i =  0} },

@@ -97,6 +97,7 @@ int tisaltscreen(void);
 void tresize(int, int);
 void tsetdirtattr(int);
 void ttyhangup(void);
+int ttybusy(void);
 int ttynew(const char *, char *, const char *, char **);
 size_t ttyread(void);
 void ttyresize(int, int);

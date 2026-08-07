@@ -28,6 +28,8 @@ Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather tha
 
 The version/date splash is local X frontend code rather than a patch from suckless.org. It draws only on the backing pixmap, uses the monotonic event-loop timer, and forces a full redraw when hidden so it cannot affect terminal history or leave stale pixels.
 
+The Alt-F4 close warning reuses the original tree's Linux `/proc` descendant detection and portable foreground-process-group fallback. Its old synchronous dmenu command was replaced by a nonblocking Xft overlay with double-close confirmation, Escape cancellation, and a four-second timeout.
+
 ## Active-line repaint experiment
 
 The `reflow-skip-active-line` branch defaults `reflowactive` to `0`. Completed output and history reflow normally, but when the original terminal child owns the foreground process group, the cursor-containing logical line is cleared after its cursor has been mapped. Readline then repaints that line after `SIGWINCH` without stale prompt copies entering history. Set `reflowactive` to `1` for the standard patch behavior.
@@ -40,7 +42,6 @@ This deliberately trades preservation of an uncompleted foreground-shell line fo
 - HarfBuzz/ligatures
 - Vim-style browse mode
 - External pipe and URL/output helpers
-- Close-warning dialog
 
 Stock fontconfig fallback is used. The preferred primary font is `DroidSansM Nerd Font Mono`.
 

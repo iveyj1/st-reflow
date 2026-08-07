@@ -21,6 +21,7 @@
 #include "win.h"
 
 #if   defined(__linux)
+ #include <dirent.h>
  #include <pty.h>
 #elif defined(__OpenBSD__) || defined(__NetBSD__) || defined(__APPLE__)
  #include <util.h>
@@ -1026,6 +1027,74 @@ ttyhangup(void)
 {
 	/* Send SIGHUP to shell */
 	kill(pid, SIGHUP);
+}
+
+#if defined(__linux)
+static int
+procinfo(pid_t proc, pid_t *ppid, char *state)
+{
+	char path[64], buf[1024], *rp;
+	FILE *fp;
+	long lppid;
+	int r;
+
+	snprintf(path, sizeof path, "/proc/%ld/stat", (long)proc);
+	if (!(fp = fopen(path, "r")))
+		return 0;
+	r = !!fgets(buf, sizeof buf, fp);
+	fclose(fp);
+	if (!r || !(rp = strrchr(buf, ')')))
+		return 0;
+	if (sscanf(rp + 2, "%c %ld", state, &lppid) != 2)
+		return 0;
+	*ppid = (pid_t)lppid;
+	return 1;
+}
+
+static int
+isdescendant(pid_t proc, pid_t ancestor)
+{
+	pid_t ppid;
+	char state;
+	int depth = 0;
+
+	while (proc > 1 && depth++ < 128) {
+		if (!procinfo(proc, &ppid, &state))
+			return 0;
+		if (ppid == ancestor)
+			return state != 'Z';
+		proc = ppid;
+	}
+	return 0;
+}
+#endif
+
+int
+ttybusy(void)
+{
+#if defined(__linux)
+	DIR *dir;
+	struct dirent *de;
+	pid_t proc;
+
+	if (pid <= 0 || !(dir = opendir("/proc")))
+		return 0;
+	while ((de = readdir(dir))) {
+		if (!isdigit((unsigned char)de->d_name[0]))
+			continue;
+		proc = (pid_t)strtol(de->d_name, NULL, 10);
+		if (proc != pid && isdescendant(proc, pid)) {
+			closedir(dir);
+			return 1;
+		}
+	}
+	closedir(dir);
+	return 0;
+#else
+	pid_t fg;
+
+	return pid > 0 && (fg = tcgetpgrp(cmdfd)) > 0 && fg != pid;
+#endif
 }
 
 int

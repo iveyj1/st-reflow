@@ -64,6 +64,7 @@ typedef struct {
 static void clipcopy(const Arg *);
 static void clippaste(const Arg *);
 static void numlock(const Arg *);
+static void requestclose(const Arg *);
 static void selpaste(const Arg *);
 static void zoom(const Arg *);
 static void zoomabs(const Arg *);
@@ -173,8 +174,9 @@ static void xunloadfont(Font *);
 static void xunloadfonts(void);
 static void xsetenv(void);
 static void xseturgency(int);
-static void xdrawsplash(void);
+static void xdrawoverlay(const char *, unsigned int);
 static void xsplashhide(void);
+static void xclosewarninghide(void);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
 
@@ -274,6 +276,8 @@ static uint buttons; /* bit field of pressed buttons */
 static int focused;
 static int splashvisible;
 static struct timespec splashstart;
+static int closewarningvisible;
+static struct timespec closewarningstart;
 
 void
 clipcopy(const Arg *dummy)
@@ -347,6 +351,29 @@ void
 ttysend(const Arg *arg)
 {
 	ttywrite(arg->s, strlen(arg->s), 1);
+}
+
+static void
+requestclose(const Arg *arg)
+{
+	struct timespec now;
+
+	(void)arg;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	if (closewarningvisible &&
+	    TIMEDIFF(now, closewarningstart) < closewarningtimeout) {
+		ttyhangup();
+		exit(0);
+	}
+	if (!ttybusy() || !closewarningtimeout) {
+		ttyhangup();
+		exit(0);
+	}
+
+	splashvisible = 0;
+	closewarningvisible = 1;
+	closewarningstart = now;
+	redraw();
 }
 
 int
@@ -494,6 +521,7 @@ bpress(XEvent *e)
 	int snap;
 
 	xsplashhide();
+	xclosewarninghide();
 	if (1 <= btn && btn <= 11)
 		buttons |= 1 << (btn-1);
 
@@ -1748,23 +1776,23 @@ xdrawline(Line line, int x1, int y1, int x2)
 }
 
 static void
-xdrawsplash(void)
+xdrawoverlay(const char *text, unsigned int coloridx)
 {
 	XGlyphInfo ext;
 	XftColor *color;
 	int len, x, y;
 
-	if (!splashvisible)
+	if (!text || !text[0])
 		return;
 
-	len = strlen(splashtext);
-	XftTextExtentsUtf8(xw.dpy, dc.font.match, (const FcChar8 *)splashtext,
+	len = strlen(text);
+	XftTextExtentsUtf8(xw.dpy, dc.font.match, (const FcChar8 *)text,
 	                   len, &ext);
-	color = &dc.col[splashcolor < dc.collen ? splashcolor : defaultfg];
+	color = &dc.col[coloridx < dc.collen ? coloridx : defaultfg];
 	x = MAX(win.hborderpx, win.w - win.hborderpx - ext.xOff - win.cw / 2);
 	y = win.h - win.vborderpx - dc.font.descent;
 	XftDrawStringUtf8(xw.draw, color, dc.font.match, x, y,
-	                  (const FcChar8 *)splashtext, len);
+	                  (const FcChar8 *)text, len);
 }
 
 static void
@@ -1776,10 +1804,22 @@ xsplashhide(void)
 	redraw();
 }
 
+static void
+xclosewarninghide(void)
+{
+	if (!closewarningvisible)
+		return;
+	closewarningvisible = 0;
+	redraw();
+}
+
 void
 xfinishdraw(void)
 {
-	xdrawsplash();
+	if (closewarningvisible)
+		xdrawoverlay(closewarningtext, closewarningcolor);
+	else if (splashvisible)
+		xdrawoverlay(splashtext, splashcolor);
 	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
 			win.h, 0, 0);
 	XSetForeground(xw.dpy, dc.gc,
@@ -1962,13 +2002,23 @@ kpress(XEvent *ev)
 	} else {
 		len = XLookupString(e, buf, sizeof buf, &ksym, NULL);
 	}
+	if (closewarningvisible && ksym == XK_Escape) {
+		xclosewarninghide();
+		return;
+	}
+
 	/* 1. shortcuts */
 	for (bp = shortcuts; bp < shortcuts + LEN(shortcuts); bp++) {
 		if (ksym == bp->keysym && match(bp->mod, e->state)) {
+			if (bp->func != requestclose)
+				xclosewarninghide();
 			bp->func(&(bp->arg));
 			return;
 		}
 	}
+	/* Pressing Alt for the confirming Alt-F4 must not cancel the warning. */
+	if (!BETWEEN(ksym, XK_Shift_L, XK_Hyper_R))
+		xclosewarninghide();
 
 	/* 2. custom keys from config.h */
 	if ((customkey = kmap(ksym, e->state))) {
@@ -2009,8 +2059,7 @@ cmessage(XEvent *e)
 			win.mode &= ~MODE_FOCUSED;
 		}
 	} else if (e->xclient.data.l[0] == xw.wmdeletewin) {
-		ttyhangup();
-		exit(0);
+		requestclose(NULL);
 	}
 }
 
@@ -2089,6 +2138,11 @@ run(void)
 			splashvisible = 0;
 			redraw();
 		}
+		if (closewarningvisible &&
+		    TIMEDIFF(now, closewarningstart) >= closewarningtimeout) {
+			closewarningvisible = 0;
+			redraw();
+		}
 
 		/*
 		 * To reduce flicker and tearing, when new content or event
@@ -2127,6 +2181,13 @@ run(void)
 		}
 		if (splashvisible) {
 			double remain = splashtimeout - TIMEDIFF(now, splashstart);
+
+			if (timeout < 0 || remain < timeout)
+				timeout = MAX(remain, 0);
+		}
+		if (closewarningvisible) {
+			double remain = closewarningtimeout -
+			                TIMEDIFF(now, closewarningstart);
 
 			if (timeout < 0 || remain < timeout)
 				timeout = MAX(remain, 0);

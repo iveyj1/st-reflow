@@ -38,6 +38,7 @@ Each functional addition was kept in a separate commit and built before continui
 9. `CSI 3 J` erase-saved-lines handling
 10. Modern Vim terminal capability handling
 11. A temporary Xft version/date splash that never enters terminal history
+12. A dependency-free Alt-F4/process-close warning overlay
 
 Font2 and HarfBuzz were intentionally omitted. DroidSansM is the preferred primary font, while stock fontconfig fallback handles other glyphs.
 
@@ -130,8 +131,13 @@ AddressSanitizer/UBSan testing was attempted but the machine lacked the ASan run
 
 The inconspicuous startup label is an Xft overlay on the X backing pixmap, not terminal output. It is drawn in the lower-right corner using a dim palette color, expires through the monotonic event-loop timer, and is dismissed by keyboard or mouse input. Dismissal forces a full terminal redraw to remove the overlay cleanly. The version/date string is maintained explicitly in `config.def.h` for reproducible builds.
 
+## Close warning
+
+The original tree launched dmenu synchronously from `quit()`. The rebuild restores its Linux `/proc` descendant detection with a foreground-process-group fallback, but replaces dmenu with a nonblocking Xft overlay. Idle terminals close immediately. A busy terminal requires the close action twice within four seconds; `Esc` cancels. Alt-F4 and `WM_DELETE` use the same path.
+
 ## Known limitations and risks
 
+- Linux descendant detection intentionally warns for background jobs that remain children of the shell.
 - `reflowactive = 0` may clear an unfinished line owned by the original terminal child.
 - History capacity is 2000 physical rows; narrowing can consume capacity and evict older content.
 - Synchronized-output mode is ignored, not implemented.
