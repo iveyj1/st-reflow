@@ -22,7 +22,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - Dependency-free Alt-F4/process-close warning overlay
 - Reflow-aware external pipe with URL and command-output helpers
 - Vim-style keyboard copy mode spanning offscreen history
-- Vim-compatible `CSI 3 J` and modern capability-probe handling
+- Vim-compatible `CSI 3 J`, quiet OSC 8 recognition, and modern capability-probe handling
 - Stock fontconfig fallback, without Font2 or HarfBuzz
 
 Deliberately omitted:

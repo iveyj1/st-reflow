@@ -24,7 +24,7 @@ The two conflicts in the first upstream merge retained the reflow patch's altern
 
 Xresources are loaded at startup. The patch's `SIGUSR1` runtime reload was deliberately omitted because its signal handler called Xlib and allocator functions that are not async-signal-safe.
 
-Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented. Modern Vim capability probes are answered or ignored without diagnostics, and `CSI 3 J` clears inaccessible scrollback as specified by xterm.
+Synchronized-output mode (`CSI ? 2026 h/l`) is recognized and ignored rather than implemented. Modern Vim capability probes are answered or ignored without diagnostics, unsupported OSC 8 hyperlink delimiters are recognized quietly, and `CSI 3 J` clears inaccessible scrollback as specified by xterm.
 
 The version/date splash is local X frontend code rather than a patch from suckless.org. It draws only on the backing pixmap, uses the monotonic event-loop timer, and forces a full redraw when hidden so it cannot affect terminal history or leave stale pixels.
 
