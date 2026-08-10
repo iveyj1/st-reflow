@@ -117,7 +117,7 @@ Stock fontconfig fallback is used for symbols and emoji. The DroidSansM font is 
 | `y` | Copy the selection, or the current logical line, to PRIMARY and CLIPBOARD |
 | Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode |
 
-Copy mode is disabled on the alternate screen. Any terminal resize cancels it rather than attempting to preserve cursor and selection coordinates through reflow. Global `Alt+F4` close handling remains available while copy mode is active.
+Copy mode uses a configurable hollow cursor drawn independently of the child application's cursor visibility. It therefore remains visible in programs such as Pi that hide the terminal cursor and paint their own editor cursor. Copy mode is disabled on the alternate screen. Any terminal resize cancels it rather than attempting to preserve cursor and selection coordinates through reflow. Global `Alt+F4` close handling remains available while copy mode is active.
 
 ## External pipe
 

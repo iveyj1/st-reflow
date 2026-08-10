@@ -19,6 +19,10 @@ static const char *closewarningtext =
 static unsigned int closewarningtimeout = 4000;
 static unsigned int closewarningcolor = 3;
 
+/* Hollow cursor used by keyboard copy mode, even when the child hides its cursor. */
+static unsigned int copycursorcolor = 3;
+static unsigned int copycursorwidth = 2;
+
 /*
  * What program is execed by st depends of these precedence rules:
  * 1: program passed with -e

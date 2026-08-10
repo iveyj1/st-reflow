@@ -3443,8 +3443,8 @@ draw(void)
 
 		if (TLINE(copyy)[ncx].mode & ATTR_WDUMMY && ncx > 0)
 			ncx--;
-		xdrawcursor(ncx, copyy, TLINE(copyy)[ncx],
-		            ncx, copyy, TLINE(copyy)[ncx]);
+		xdrawcopycursor(ncx, copyy,
+		                TLINE(copyy)[ncx].mode & ATTR_WIDE);
 	} else {
 		xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
 		            term.ocx, term.ocy, term.line[term.ocy][term.ocx]);

@@ -1611,6 +1611,28 @@ xdrawglyph(Glyph g, int x, int y)
 }
 
 void
+xdrawcopycursor(int cx, int cy, int wide)
+{
+	XftColor *color;
+	int height = win.ch;
+	int width = win.cw * (wide ? 2 : 1);
+	int thickness = MAX(1, MIN((int)copycursorwidth,
+	                           MIN(width, height) / 2));
+	int x = win.hborderpx + cx * win.cw;
+	int y = win.vborderpx + cy * win.ch;
+
+	color = &dc.col[copycursorcolor < dc.collen ?
+	                copycursorcolor : defaultcs];
+	XftDrawRect(xw.draw, color, x, y, width, thickness);
+	XftDrawRect(xw.draw, color, x, y + height - thickness,
+	            width, thickness);
+	XftDrawRect(xw.draw, color, x, y + thickness,
+	            thickness, height - 2 * thickness);
+	XftDrawRect(xw.draw, color, x + width - thickness, y + thickness,
+	            thickness, height - 2 * thickness);
+}
+
+void
 xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
 {
 	Color drawcol;
