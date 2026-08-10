@@ -21,6 +21,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - Brief, history-free version/date splash overlay
 - Dependency-free Alt-F4/process-close warning overlay
 - Reflow-aware external pipe with URL and command-output helpers
+- Vim-style keyboard copy mode spanning offscreen history
 - Vim-compatible `CSI 3 J` and modern capability-probe handling
 - Stock fontconfig fallback, without Font2 or HarfBuzz
 
@@ -28,7 +29,6 @@ Deliberately omitted:
 
 - HarfBuzz/ligatures
 - Explicit Font2 fallback
-- Vim-style terminal browse mode
 - Runtime Xresources reload by signal
 
 ## Active-line behavior
@@ -95,9 +95,29 @@ Stock fontconfig fallback is used for symbols and emoji. The DroidSansM font is 
 | `Ctrl` + mouse wheel | Change font size |
 | Middle click | Paste primary selection |
 | `Alt+F4` | Close immediately when idle; require a second press when a process is running |
+| `Alt+Escape` | Enter or leave keyboard copy mode |
 | `Alt+l` | Choose a URL from primary-screen history and open it |
 | `Alt+y` | Choose a URL from primary-screen history and copy it |
 | `Alt+o` | Choose a command and copy its output |
+
+## Keyboard copy mode
+
+`Alt+Escape` enters a primary-screen copy mode whose cursor can move through saved history beyond the visible viewport. Copy mode consumes ordinary input instead of sending it to the pseudoterminal.
+
+| Key | Action |
+| --- | --- |
+| `h/j/k/l`, arrows | Move by one displayed cell or row |
+| `0`, `$`, Home, End | Move to beginning or end of displayed row |
+| `gg` | Move to oldest available history |
+| `G` | Move to the live terminal cursor |
+| `Ctrl+u`, `Ctrl+d` | Move half a page |
+| Page Up, Page Down | Move a full page |
+| `v` | Toggle characterwise selection |
+| `V` | Toggle logical-line selection, including soft-wrapped rows |
+| `y` | Copy the selection, or the current logical line, to PRIMARY and CLIPBOARD |
+| Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode |
+
+Copy mode is disabled on the alternate screen. Any terminal resize cancels it rather than attempting to preserve cursor and selection coordinates through reflow. Global `Alt+F4` close handling remains available while copy mode is active.
 
 ## External pipe
 

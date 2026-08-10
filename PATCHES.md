@@ -32,6 +32,8 @@ The Alt-F4 close warning reuses the original tree's Linux `/proc` descendant det
 
 The external pipe is a local, reflow-aware replacement for the old `TLINE_HIST` traversal. It enumerates only available history from oldest to newest, appends the visible primary screen, joins soft wraps, and omits unused trailing rows. The URL and command-output bindings use the existing `st-urlhandler` and `st-copyout` scripts.
 
+Keyboard copy mode is a focused local successor to the old normal mode. Its cursor navigates the current reflowed physical rows, while visual and linewise yanks use the existing scrollback-aware selection machinery. Width or height changes cancel the mode so physical coordinates are never retained across reflow.
+
 ## Active-line repaint experiment
 
 The `reflow-skip-active-line` branch defaults `reflowactive` to `0`. Completed output and history reflow normally, but when the original terminal child owns the foreground process group, the cursor-containing logical line is cleared after its cursor has been mapped. Readline then repaints that line after `SIGWINCH` without stale prompt copies entering history. Set `reflowactive` to `1` for the standard patch behavior.
@@ -42,7 +44,6 @@ This deliberately trades preservation of an uncompleted foreground-shell line fo
 
 - Font2
 - HarfBuzz/ligatures
-- Vim-style browse mode
 
 Stock fontconfig fallback is used. The preferred primary font is `DroidSansM Nerd Font Mono`.
 

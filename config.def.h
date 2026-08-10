@@ -228,6 +228,7 @@ static char *copyoutputcmd[] =
 static Shortcut shortcuts[] = {
 	/* mask                 keysym          function        argument */
 	{ MODKEY,               XK_F4,          requestclose,   {.i =  0} },
+	{ MODKEY,               XK_Escape,      copymode,       {.i =  0} },
 	{ XK_ANY_MOD,           XK_Break,       sendbreak,      {.i =  0} },
 	{ ControlMask,          XK_Print,       toggleprinter,  {.i =  0} },
 	{ ShiftMask,            XK_Print,       printscreen,    {.i =  0} },

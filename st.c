@@ -263,6 +263,7 @@ static ssize_t xwrite(int, const char *, size_t);
 /* Globals */
 static Term term;
 static Selection sel;
+static int copyactive, copyvisual, copyx, copyy;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
@@ -721,6 +722,140 @@ selremove(void)
 {
 	sel.mode = SEL_IDLE;
 	sel.ob.x = -1;
+}
+
+static void
+copyclamp(void)
+{
+	int len = tlinelen(TLINE(copyy));
+
+	copyx = MIN(copyx, MAX(len - 1, 0));
+	if (TLINE(copyy)[copyx].mode & ATTR_WDUMMY && copyx > 0)
+		copyx--;
+}
+
+static void
+copyextend(void)
+{
+	if (copyvisual)
+		selextend(copyx, copyy + term.scr, SEL_REGULAR, 0);
+}
+
+static void
+copymove(int dx, int dy)
+{
+	Arg a = {.i = 1};
+
+	copyx = MAX(0, MIN(term.col - 1, copyx + dx));
+	while (dy < 0) {
+		if (copyy > 0)
+			copyy--;
+		else
+			kscrollup(&a);
+		dy++;
+	}
+	while (dy > 0) {
+		if (copyy < term.row - 1)
+			copyy++;
+		else
+			kscrolldown(&a);
+		dy--;
+	}
+	copyclamp();
+	copyextend();
+	tfulldirt();
+}
+
+int
+copymodeactive(void)
+{
+	return copyactive;
+}
+
+void
+copymode(const Arg *arg)
+{
+	(void)arg;
+	if (IS_SET(MODE_ALTSCREEN))
+		return;
+	if (copyactive) {
+		copymodeaction(COPY_EXIT);
+		return;
+	}
+
+	copyactive = 1;
+	copyvisual = 0;
+	copyy = term.scr ? term.row - 1 : term.c.y;
+	copyx = term.scr ? 0 : term.c.x;
+	copyclamp();
+	tfulldirt();
+}
+
+void
+copymodeaction(enum copymode_action action)
+{
+	Arg a;
+	char *s;
+
+	if (!copyactive)
+		return;
+
+	switch (action) {
+	case COPY_LEFT:       copymove(-1, 0); return;
+	case COPY_DOWN:       copymove(0, 1); return;
+	case COPY_UP:         copymove(0, -1); return;
+	case COPY_RIGHT:      copymove(1, 0); return;
+	case COPY_HOME:       copyx = 0; break;
+	case COPY_END:        copyx = term.col - 1; copyclamp(); break;
+	case COPY_HALFDOWN:   copymove(0, MAX(term.row / 2, 1)); return;
+	case COPY_HALFUP:     copymove(0, -MAX(term.row / 2, 1)); return;
+	case COPY_PAGEDOWN:   copymove(0, MAX(term.row - 1, 1)); return;
+	case COPY_PAGEUP:     copymove(0, -MAX(term.row - 1, 1)); return;
+	case COPY_TOP:
+		a.i = HISTSIZE;
+		kscrollup(&a);
+		copyx = copyy = 0;
+		copyclamp();
+		break;
+	case COPY_BOTTOM:
+		a.i = HISTSIZE;
+		kscrolldown(&a);
+		copyx = term.c.x;
+		copyy = term.c.y;
+		copyclamp();
+		break;
+	case COPY_VISUAL:
+	case COPY_VISUALLINE:
+		if (copyvisual) {
+			copyvisual = 0;
+			selclear();
+		} else {
+			copyvisual = action == COPY_VISUALLINE ? 2 : 1;
+			selstart(copyx, copyy + term.scr,
+			    copyvisual == 2 ? SNAP_LINE : 0);
+		}
+		break;
+	case COPY_YANK:
+		if (!copyvisual) {
+			selstart(copyx, copyy + term.scr, SNAP_LINE);
+			selextend(copyx, copyy + term.scr, SEL_REGULAR, 1);
+		} else {
+			selextend(copyx, copyy + term.scr, SEL_REGULAR, 1);
+		}
+		if ((s = getsel())) {
+			xsetsel(s);
+			xclipcopy();
+		}
+		copyvisual = 0;
+		selclear();
+		break;
+	case COPY_EXIT:
+		copyactive = copyvisual = 0;
+		selclear();
+		break;
+	}
+	copyextend();
+	tfulldirt();
 }
 
 void
@@ -3001,6 +3136,9 @@ tresize(int col, int row)
 {
 	int *bp;
 
+	if (copyactive && (col != term.col || row != term.row))
+		copymodeaction(COPY_EXIT);
+
 	/* col and row are always MAX(_, 1)
 	if (col < 1 || row < 1) {
 		fprintf(stderr, "tresize: error resizing to %dx%d\n", col, row);
@@ -3300,8 +3438,17 @@ draw(void)
 		cx--;
 
 	drawregion(0, 0, term.col, term.row);
-	xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
-			term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
+	if (copyactive) {
+		int ncx = copyx;
+
+		if (TLINE(copyy)[ncx].mode & ATTR_WDUMMY && ncx > 0)
+			ncx--;
+		xdrawcursor(ncx, copyy, TLINE(copyy)[ncx],
+		            ncx, copyy, TLINE(copyy)[ncx]);
+	} else {
+		xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
+		            term.ocx, term.ocy, term.line[term.ocy][term.ocx]);
+	}
 	term.ocx = cx;
 	term.ocy = term.c.y;
 	xfinishdraw();

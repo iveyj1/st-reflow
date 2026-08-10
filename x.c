@@ -278,6 +278,7 @@ static int splashvisible;
 static struct timespec splashstart;
 static int closewarningvisible;
 static struct timespec closewarningstart;
+static int copypendingg;
 
 void
 clipcopy(const Arg *dummy)
@@ -2004,6 +2005,68 @@ kpress(XEvent *ev)
 	}
 	if (closewarningvisible && ksym == XK_Escape) {
 		xclosewarninghide();
+		return;
+	}
+	if (copymodeactive()) {
+		enum copymode_action action;
+		char c = len == 1 ? buf[0] : 0;
+
+		if ((e->state & Mod1Mask) && ksym == XK_F4) {
+			requestclose(NULL);
+			return;
+		}
+		if ((e->state & Mod1Mask) && ksym == XK_Escape) {
+			copypendingg = 0;
+			copymode(NULL);
+			return;
+		}
+		if (e->state & ControlMask) {
+			if (ksym == XK_d || c == 'd')
+				action = COPY_HALFDOWN;
+			else if (ksym == XK_u || c == 'u')
+				action = COPY_HALFUP;
+			else if (ksym == XK_c || c == 'c')
+				action = COPY_EXIT;
+			else
+				return;
+		} else if (ksym == XK_Left || c == 'h') {
+			action = COPY_LEFT;
+		} else if (ksym == XK_Down || c == 'j') {
+			action = COPY_DOWN;
+		} else if (ksym == XK_Up || c == 'k') {
+			action = COPY_UP;
+		} else if (ksym == XK_Right || c == 'l') {
+			action = COPY_RIGHT;
+		} else if (ksym == XK_Home || c == '0') {
+			action = COPY_HOME;
+		} else if (ksym == XK_End || c == '$') {
+			action = COPY_END;
+		} else if (ksym == XK_Next) {
+			action = COPY_PAGEDOWN;
+		} else if (ksym == XK_Prior) {
+			action = COPY_PAGEUP;
+		} else if (c == 'G') {
+			action = COPY_BOTTOM;
+		} else if (c == 'v') {
+			action = COPY_VISUAL;
+		} else if (c == 'V') {
+			action = COPY_VISUALLINE;
+		} else if (c == 'y') {
+			action = COPY_YANK;
+		} else if (ksym == XK_Escape || c == 'q' || c == 'i' || c == '\r') {
+			action = COPY_EXIT;
+		} else if (c == 'g') {
+			if (!copypendingg) {
+				copypendingg = 1;
+				return;
+			}
+			action = COPY_TOP;
+		} else {
+			copypendingg = 0;
+			return;
+		}
+		copypendingg = 0;
+		copymodeaction(action);
 		return;
 	}
 

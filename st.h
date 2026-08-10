@@ -80,6 +80,16 @@ typedef union {
 	const char *s;
 } Arg;
 
+enum copymode_action {
+	COPY_LEFT, COPY_DOWN, COPY_UP, COPY_RIGHT,
+	COPY_HOME, COPY_END, COPY_HALFDOWN, COPY_HALFUP,
+	COPY_PAGEDOWN, COPY_PAGEUP, COPY_TOP, COPY_BOTTOM,
+	COPY_VISUAL, COPY_VISUALLINE, COPY_YANK, COPY_EXIT
+};
+
+void copymode(const Arg *);
+void copymodeaction(enum copymode_action);
+int copymodeactive(void);
 void die(const char *, ...);
 void externalpipe(const Arg *);
 void redraw(void);

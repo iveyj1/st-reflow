@@ -40,6 +40,7 @@ Each functional addition was kept in a separate commit and built before continui
 11. A temporary Xft version/date splash that never enters terminal history
 12. A dependency-free Alt-F4/process-close warning overlay
 13. Reflow-aware chronological history export and external-pipe helpers
+14. A focused Vim-style keyboard copy mode
 
 Font2 and HarfBuzz were intentionally omitted. DroidSansM is the preferred primary font, while stock fontconfig fallback handles other glyphs.
 
@@ -132,6 +133,10 @@ AddressSanitizer/UBSan testing was attempted but the machine lacked the ASan run
 
 The inconspicuous startup label is an Xft overlay on the X backing pixmap, not terminal output. It is drawn in the lower-right corner using a dim palette color, expires through the monotonic event-loop timer, and is dismissed by keyboard or mouse input. Dismissal forces a full terminal redraw to remove the overlay cleanly. The version/date string is maintained explicitly in `config.def.h` for reproducible builds.
 
+## Keyboard copy mode
+
+The old normal mode stored a cursor in displayed physical rows and called selection functions directly. The replacement keeps that intentionally small command set but accounts for the reflow tree's scroll offset when creating and extending selections. It supports offscreen characterwise and logical-line yanks, copies to both PRIMARY and CLIPBOARD, refuses alternate-screen entry, and cancels on resize rather than retaining invalid physical coordinates.
+
 ## External pipe
 
 The old external pipe traversed every slot through `TLINE_HIST`, which was tied to the former circular-history layout. The replacement walks the reflow tree's available coordinates from `-term.histf` through the visible primary screen using `TLINEABS`. UTF-8 glyphs are emitted oldest-first, soft wraps are joined, and unused rows below the final visible text are omitted. Export was verified across width reflow, wide glyphs, and saved-history rollover into the viewport.
@@ -142,6 +147,8 @@ The original tree launched dmenu synchronously from `quit()`. The rebuild restor
 
 ## Known limitations and risks
 
+- Copy-mode `h/j/k/l` and `0/$` operate on displayed physical rows; logical-line selection uses hard/soft wrap metadata.
+- Copy mode intentionally exits on any resize.
 - Linux descendant detection intentionally warns for background jobs that remain children of the shell.
 - `reflowactive = 0` may clear an unfinished line owned by the original terminal child.
 - History capacity is 2000 physical rows; narrowing can consume capacity and evict older content.
