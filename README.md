@@ -17,7 +17,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - Focused and unfocused background opacity
 - Startup Xresources loading
 - No-bright-on-bold
-- Boxdraw rendering
+- Geometric boxdraw rendering for aligned tables and block characters
 - Brief, history-free version/date splash overlay
 - Dependency-free Alt-F4/process-close warning overlay
 - Reflow-aware external pipe with URL and command-output helpers

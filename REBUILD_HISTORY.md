@@ -34,7 +34,7 @@ Each functional addition was kept in a separate commit and built before continui
 5. Alpha transparency
 6. Focus-dependent opacity
 7. Startup Xresources loading
-8. Boxdraw
+8. Boxdraw, enabled geometrically after comparison with Ghostty table rendering
 9. `CSI 3 J` erase-saved-lines handling
 10. Modern Vim terminal capability handling
 11. A temporary Xft version/date splash that never enters terminal history
