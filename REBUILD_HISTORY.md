@@ -54,7 +54,7 @@ Vim initially produced messages such as:
 erresc: unknown csi ESC[3J
 ```
 
-`CSI 3 J` now clears saved history using the reflow history counters rather than the old custom tree's physical-history implementation.
+`CSI 3 J` now clears saved history using the reflow history counters rather than the old custom tree's physical-history implementation. The `st.info` entry later gained the extended `E3` capability, causing ncurses `clear` to emit this sequence; `clear -x` retains visible-screen-only behavior.
 
 Newer Vim versions also probe DECRQM, kitty keyboard flags, and modifyOtherKeys. Unsupported probes are now answered or ignored quietly instead of being printed as parser errors. Vim startup and exit were smoke-tested after these changes.
 

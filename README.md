@@ -125,6 +125,16 @@ The external pipe exports available primary-screen history in chronological orde
 
 The pipe mechanism itself has no dmenu dependency. The configured `st-urlhandler` and `st-copyout` consumers use dmenu and xclip for their selection interfaces.
 
+## Clearing history
+
+The terminfo entry advertises `E3=\E[3J`, matching st's erase-saved-lines implementation. With a current terminfo installation:
+
+- `clear` clears the visible screen and saved scrollback.
+- `clear -x` clears only the visible screen and preserves scrollback.
+- Readline `Ctrl+L` normally repaints the visible display without requesting history erasure.
+
+`CSI 3 J` makes saved history inaccessible but is not a secure memory wipe.
+
 ## Close warning
 
 When no descendant process is running, `Alt+F4` and a window-manager close request exit immediately. If a process is still running, st displays:
