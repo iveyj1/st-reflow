@@ -738,7 +738,7 @@ static void
 copyextend(void)
 {
 	if (copyvisual)
-		selextend(copyx, copyy + term.scr, SEL_REGULAR, 0);
+		selextend(copyx, copyy, SEL_REGULAR, 0);
 }
 
 static void
@@ -831,16 +831,16 @@ copymodeaction(enum copymode_action action)
 			selclear();
 		} else {
 			copyvisual = action == COPY_VISUALLINE ? 2 : 1;
-			selstart(copyx, copyy + term.scr,
+			selstart(copyx, copyy,
 			    copyvisual == 2 ? SNAP_LINE : 0);
 		}
 		break;
 	case COPY_YANK:
 		if (!copyvisual) {
-			selstart(copyx, copyy + term.scr, SNAP_LINE);
-			selextend(copyx, copyy + term.scr, SEL_REGULAR, 1);
+			selstart(copyx, copyy, SNAP_LINE);
+			selextend(copyx, copyy, SEL_REGULAR, 1);
 		} else {
-			selextend(copyx, copyy + term.scr, SEL_REGULAR, 1);
+			selextend(copyx, copyy, SEL_REGULAR, 1);
 		}
 		if ((s = getsel())) {
 			xsetsel(s);

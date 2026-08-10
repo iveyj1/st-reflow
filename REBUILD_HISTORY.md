@@ -135,7 +135,7 @@ The inconspicuous startup label is an Xft overlay on the X backing pixmap, not t
 
 ## Keyboard copy mode
 
-The old normal mode stored a cursor in displayed physical rows and called selection functions directly. The replacement keeps that intentionally small command set but accounts for the reflow tree's scroll offset when creating and extending selections. It supports offscreen characterwise and logical-line yanks, copies to both PRIMARY and CLIPBOARD, refuses alternate-screen entry, and cancels on resize rather than retaining invalid physical coordinates. Its hollow Xft cursor is separate from the normal terminal cursor, so an application cannot hide it with `CSI ? 25 l`; this is required for Pi and other TUIs that paint a fake editor cursor.
+The old normal mode stored a cursor in displayed physical rows and called selection functions directly. The replacement keeps that intentionally small command set but accounts for the reflow tree's scroll offset when creating and extending selections. It supports offscreen characterwise and logical-line yanks, copies to both PRIMARY and CLIPBOARD, refuses alternate-screen entry, and cancels on resize rather than retaining invalid physical coordinates. Selection entry points use viewport rows directly; the scrollback functions translate existing selection coordinates as the viewport moves. Adding `term.scr` at selection creation incorrectly limited `gg V G y` yanks to live-screen rows and was removed after a forced multi-page regression test. Its hollow Xft cursor is separate from the normal terminal cursor, so an application cannot hide it with `CSI ? 25 l`; this is required for Pi and other TUIs that paint a fake editor cursor.
 
 ## External pipe
 

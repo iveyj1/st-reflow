@@ -32,7 +32,7 @@ The Alt-F4 close warning reuses the original tree's Linux `/proc` descendant det
 
 The external pipe is a local, reflow-aware replacement for the old `TLINE_HIST` traversal. It enumerates only available history from oldest to newest, appends the visible primary screen, joins soft wraps, and omits unused trailing rows. The URL and command-output bindings use the existing `st-urlhandler` and `st-copyout` scripts.
 
-Keyboard copy mode is a focused local successor to the old normal mode. Its cursor navigates the current reflowed physical rows, while visual and linewise yanks use the existing scrollback-aware selection machinery. A dedicated hollow cursor ignores application-controlled terminal-cursor hiding without modifying terminal cells. Width or height changes cancel the mode so physical coordinates are never retained across reflow.
+Keyboard copy mode is a focused local successor to the old normal mode. Its cursor navigates the current reflowed physical rows, while visual and linewise yanks use the existing scrollback-aware selection machinery and its viewport-relative coordinate translation. A dedicated hollow cursor ignores application-controlled terminal-cursor hiding without modifying terminal cells. Width or height changes cancel the mode so physical coordinates are never retained across reflow.
 
 ## Active-line repaint experiment
 
