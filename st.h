@@ -81,6 +81,7 @@ typedef union {
 } Arg;
 
 void die(const char *, ...);
+void externalpipe(const Arg *);
 void redraw(void);
 void draw(void);
 

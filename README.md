@@ -20,6 +20,7 @@ See [PATCHES.md](PATCHES.md) for exact patch sources and [REBUILD_HISTORY.md](RE
 - Boxdraw rendering
 - Brief, history-free version/date splash overlay
 - Dependency-free Alt-F4/process-close warning overlay
+- Reflow-aware external pipe with URL and command-output helpers
 - Vim-compatible `CSI 3 J` and modern capability-probe handling
 - Stock fontconfig fallback, without Font2 or HarfBuzz
 
@@ -28,8 +29,6 @@ Deliberately omitted:
 - HarfBuzz/ligatures
 - Explicit Font2 fallback
 - Vim-style terminal browse mode
-- External-pipe, URL, and command-output helpers
-- Close-warning dialog
 - Runtime Xresources reload by signal
 
 ## Active-line behavior
@@ -96,6 +95,15 @@ Stock fontconfig fallback is used for symbols and emoji. The DroidSansM font is 
 | `Ctrl` + mouse wheel | Change font size |
 | Middle click | Paste primary selection |
 | `Alt+F4` | Close immediately when idle; require a second press when a process is running |
+| `Alt+l` | Choose a URL from primary-screen history and open it |
+| `Alt+y` | Choose a URL from primary-screen history and copy it |
+| `Alt+o` | Choose a command and copy its output |
+
+## External pipe
+
+The external pipe exports available primary-screen history in chronological order, followed by visible screen contents. Soft-wrapped physical rows are joined; hard line endings remain newlines. Trailing unused screen rows are omitted, and alternate-screen contents are not exported.
+
+The pipe mechanism itself has no dmenu dependency. The configured `st-urlhandler` and `st-copyout` consumers use dmenu and xclip for their selection interfaces.
 
 ## Close warning
 

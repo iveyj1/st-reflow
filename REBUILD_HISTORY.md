@@ -39,6 +39,7 @@ Each functional addition was kept in a separate commit and built before continui
 10. Modern Vim terminal capability handling
 11. A temporary Xft version/date splash that never enters terminal history
 12. A dependency-free Alt-F4/process-close warning overlay
+13. Reflow-aware chronological history export and external-pipe helpers
 
 Font2 and HarfBuzz were intentionally omitted. DroidSansM is the preferred primary font, while stock fontconfig fallback handles other glyphs.
 
@@ -130,6 +131,10 @@ AddressSanitizer/UBSan testing was attempted but the machine lacked the ASan run
 ## Splash overlay
 
 The inconspicuous startup label is an Xft overlay on the X backing pixmap, not terminal output. It is drawn in the lower-right corner using a dim palette color, expires through the monotonic event-loop timer, and is dismissed by keyboard or mouse input. Dismissal forces a full terminal redraw to remove the overlay cleanly. The version/date string is maintained explicitly in `config.def.h` for reproducible builds.
+
+## External pipe
+
+The old external pipe traversed every slot through `TLINE_HIST`, which was tied to the former circular-history layout. The replacement walks the reflow tree's available coordinates from `-term.histf` through the visible primary screen using `TLINEABS`. UTF-8 glyphs are emitted oldest-first, soft wraps are joined, and unused rows below the final visible text are omitted. Export was verified across width reflow, wide glyphs, and saved-history rollover into the viewport.
 
 ## Close warning
 

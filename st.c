@@ -793,21 +793,19 @@ sigchld(int a)
 	pid_t p;
 
 	olderrno = errno;
-	do {
-		p = waitpid(pid, &stat, WNOHANG);
-	} while (p < 0 && errno == EINTR);
-
-	if (p < 0)
-		_exit(1);
-
-	if (pid != p) {
-		errno = olderrno;
-		return;
+	for (;;) {
+		do {
+			p = waitpid(-1, &stat, WNOHANG);
+		} while (p < 0 && errno == EINTR);
+		if (p <= 0)
+			break;
+		if (p != pid)
+			continue;
+		if ((WIFEXITED(stat) && WEXITSTATUS(stat)) || WIFSIGNALED(stat))
+			_exit(1);
+		_exit(0);
 	}
-
-	if ((WIFEXITED(stat) && WEXITSTATUS(stat)) || WIFSIGNALED(stat))
-		_exit(1);
-	_exit(0);
+	errno = olderrno;
 }
 
 void
@@ -2400,6 +2398,64 @@ sendbreak(const Arg *arg)
 {
 	if (tcsendbreak(cmdfd, 0))
 		perror("Error sending break");
+}
+
+void
+externalpipe(const Arg *arg)
+{
+	char *buf, **argv = (char **)arg->v;
+	void (*oldsigpipe)(int);
+	int fd[2], end, len, wrapped, y;
+	Line line;
+	char *bp;
+
+	if (!argv || !argv[0] || IS_SET(MODE_ALTSCREEN) || pipe(fd) < 0)
+		return;
+
+	switch (fork()) {
+	case -1:
+		close(fd[0]);
+		close(fd[1]);
+		return;
+	case 0:
+		dup2(fd[0], STDIN_FILENO);
+		close(fd[0]);
+		close(fd[1]);
+		signal(SIGCHLD, SIG_DFL);
+		signal(SIGPIPE, SIG_DFL);
+		execvp(argv[0], argv);
+		fprintf(stderr, "st: execvp %s: %s\n", argv[0], strerror(errno));
+		_exit(1);
+	}
+
+	close(fd[0]);
+	oldsigpipe = signal(SIGPIPE, SIG_IGN);
+	buf = xmalloc(term.col * UTF_SIZ);
+
+	/* Omit unused rows below the last visible text. */
+	for (end = term.row - 1; end >= -term.histf; end--)
+		if (tlinelen(TLINEABS(end)) != 0)
+			break;
+
+	wrapped = 0;
+	for (y = -term.histf; y <= end; y++) {
+		line = TLINEABS(y);
+		len = tlinelen(line);
+		if (len > 0) {
+			bp = tgetglyphs(buf, line, &line[len - 1]);
+			if (xwrite(fd[1], buf, bp - buf) < 0)
+				break;
+		}
+		wrapped = len > 0 && (line[len - 1].mode & ATTR_WRAP);
+		if (!wrapped && xwrite(fd[1], "\n", 1) < 0)
+			break;
+	}
+	if (wrapped)
+		(void)xwrite(fd[1], "\n", 1);
+
+	free(buf);
+	close(fd[1]);
+	signal(SIGPIPE, oldsigpipe);
 }
 
 void
