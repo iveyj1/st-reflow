@@ -5,7 +5,8 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "DroidSansM Nerd Font Mono:size=15:antialias=true:autohint=true";
+static char *font = "JetBrainsMono Nerd Font Mono:size=15:antialias=true:autohint=true";
+// static char *font = "DroidSansM Nerd Font Mono:size=15:antialias=true:autohint=true";
 static int borderpx = 2;
 
 /* Brief X overlay; it is never written to terminal history. */
