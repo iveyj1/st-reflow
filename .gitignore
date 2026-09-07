@@ -1,3 +1,5 @@
 *.o
 /st
 /st-*.tar.gz
+/buildinfo.h
+/buildinfo.h.tmp

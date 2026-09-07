@@ -1,2 +1,0 @@
-#define ST_CHECKIN_HASH "abb7512"
-#define ST_CHECKIN_DATE "2026-08-31"
