@@ -10,8 +10,9 @@ static char *font = "JetBrainsMono Nerd Font Mono:size=12:antialias=true:autohin
 static int borderpx = 2;
 
 /* Brief X overlay; it is never written to terminal history. */
-static const char *splashtext = "st-reflow 0.1 · 2026-08-06";
-static unsigned int splashtimeout = 2000;
+static const char *splashtext =
+	"st-reflow 0.1 · " ST_CHECKIN_DATE " · " ST_CHECKIN_HASH;
+static unsigned int splashtimeout = 4000;
 static unsigned int splashcolor = 8;
 
 /* Nonblocking close confirmation shown when a child process is still alive. */

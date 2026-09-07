@@ -7,7 +7,25 @@ include config.mk
 SRC = st.c x.c boxdraw.c
 OBJ = $(SRC:.c=.o)
 
+# Recreate buildinfo.h when the checked-out commit changes.  Follow the
+# symbolic ref when possible; detached checkouts are covered by HEAD itself.
+GITHEAD = $(shell git rev-parse --git-path HEAD 2>/dev/null)
+GITREF = $(shell ref=$$(git symbolic-ref -q HEAD 2>/dev/null); \
+	if test -n "$$ref"; then \
+		path=$$(git rev-parse --git-path "$$ref"); \
+		if test -e "$$path"; then printf '%s' "$$path"; \
+		else git rev-parse --git-path packed-refs; fi; \
+	fi)
+
 all: st
+
+buildinfo.h: $(GITHEAD) $(GITREF) Makefile
+	@hash=$$(git rev-parse --short HEAD 2>/dev/null || printf unknown); \
+	date=$$(git show -s --format=%cs HEAD 2>/dev/null || printf unknown); \
+	printf '#define ST_CHECKIN_HASH "%s"\n#define ST_CHECKIN_DATE "%s"\n' \
+		"$$hash" "$$date" > $@.tmp; \
+	if test -r $@ && cmp -s $@.tmp $@; then rm -f $@.tmp; \
+	else mv -f $@.tmp $@; fi
 
 config.h:
 	cp config.def.h config.h
@@ -16,7 +34,7 @@ config.h:
 	$(CC) $(STCFLAGS) -c $<
 
 st.o: config.h st.h win.h
-x.o: arg.h config.h st.h win.h
+x.o: arg.h buildinfo.h config.h st.h win.h
 boxdraw.o: config.h st.h boxdraw_data.h
 
 $(OBJ): config.h config.mk
@@ -25,12 +43,13 @@ st: $(OBJ)
 	$(CC) -o $@ $(OBJ) $(STLDFLAGS)
 
 clean:
-	rm -f st $(OBJ) st-$(VERSION).tar.gz
+	rm -f st $(OBJ) buildinfo.h buildinfo.h.tmp st-$(VERSION).tar.gz
 
 dist: clean
+	$(MAKE) buildinfo.h
 	mkdir -p st-$(VERSION)
-	cp -R FAQ LEGACY LICENSE Makefile README.md PATCHES.md config.mk\
-		config.def.h st.info st.1 arg.h st.h win.h $(SRC)\
+	cp -R FAQ LEGACY TODO LICENSE Makefile README config.mk\
+		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h $(SRC)\
 		st-$(VERSION)
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
