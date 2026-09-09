@@ -2083,6 +2083,8 @@ kpress(XEvent *ev)
 				action = COPY_HALFDOWN;
 			else if (ksym == XK_u || c == 'u')
 				action = COPY_HALFUP;
+			else if (ksym == XK_v && !(e->state & ShiftMask))
+				action = COPY_VISUALRECT;
 			else if (ksym == XK_X || c == 'X')
 				action = COPY_YANK_CLEAN;
 			else if (ksym == XK_c || c == 'c')

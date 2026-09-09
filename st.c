@@ -749,16 +749,23 @@ copyclamp(void)
 {
 	int len = tlinelen(TLINE(copyy));
 
-	copyx = MIN(copyx, MAX(len - 1, 0));
+	if (copyvisual != 3)
+		copyx = MIN(copyx, MAX(len - 1, 0));
 	if (TLINE(copyy)[copyx].mode & ATTR_WDUMMY && copyx > 0)
 		copyx--;
+}
+
+static int
+copyselectiontype(void)
+{
+	return copyvisual == 3 ? SEL_RECTANGULAR : SEL_REGULAR;
 }
 
 static void
 copyextend(void)
 {
 	if (copyvisual)
-		selextend(copyx, copyy, SEL_REGULAR, 0);
+		selextend(copyx, copyy, copyselectiontype(), 0);
 }
 
 static void
@@ -846,11 +853,13 @@ copymodeaction(enum copymode_action action)
 		break;
 	case COPY_VISUAL:
 	case COPY_VISUALLINE:
+	case COPY_VISUALRECT:
 		if (copyvisual) {
 			copyvisual = 0;
 			selclear();
 		} else {
-			copyvisual = action == COPY_VISUALLINE ? 2 : 1;
+			copyvisual = action == COPY_VISUALLINE ? 2 :
+			    action == COPY_VISUALRECT ? 3 : 1;
 			selstart(copyx, copyy,
 			    copyvisual == 2 ? SNAP_LINE : 0);
 		}
@@ -861,7 +870,7 @@ copymodeaction(enum copymode_action action)
 			selstart(copyx, copyy, SNAP_LINE);
 			selextend(copyx, copyy, SEL_REGULAR, 1);
 		} else {
-			selextend(copyx, copyy, SEL_REGULAR, 1);
+			selextend(copyx, copyy, copyselectiontype(), 1);
 		}
 		if ((s = getsel())) {
 			if (action == COPY_YANK_CLEAN)
