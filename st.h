@@ -84,7 +84,7 @@ enum copymode_action {
 	COPY_LEFT, COPY_DOWN, COPY_UP, COPY_RIGHT,
 	COPY_HOME, COPY_END, COPY_HALFDOWN, COPY_HALFUP,
 	COPY_PAGEDOWN, COPY_PAGEUP, COPY_TOP, COPY_BOTTOM,
-	COPY_VISUAL, COPY_VISUALLINE, COPY_YANK, COPY_EXIT
+	COPY_VISUAL, COPY_VISUALLINE, COPY_YANK, COPY_YANK_CLEAN, COPY_EXIT
 };
 
 void copymode(const Arg *);
@@ -122,6 +122,7 @@ void selstart(int, int, int);
 void selextend(int, int, int, int);
 int selected(int, int);
 char *getsel(void);
+void seltrimtrailingws(char *);
 
 size_t utf8encode(Rune, char *);
 

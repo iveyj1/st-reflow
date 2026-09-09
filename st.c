@@ -658,6 +658,26 @@ selsnap(int *x, int *y, int direction)
 	}
 }
 
+void
+seltrimtrailingws(char *s)
+{
+	char *src, *dst, *line;
+
+	for (src = dst = line = s; *src; src++) {
+		if (*src == '\n') {
+			while (dst > line && (dst[-1] == ' ' || dst[-1] == '\t'))
+				dst--;
+			*dst++ = *src;
+			line = dst;
+		} else {
+			*dst++ = *src;
+		}
+	}
+	while (dst > line && (dst[-1] == ' ' || dst[-1] == '\t'))
+		dst--;
+	*dst = '\0';
+}
+
 char *
 getsel(void)
 {
@@ -836,6 +856,7 @@ copymodeaction(enum copymode_action action)
 		}
 		break;
 	case COPY_YANK:
+	case COPY_YANK_CLEAN:
 		if (!copyvisual) {
 			selstart(copyx, copyy, SNAP_LINE);
 			selextend(copyx, copyy, SEL_REGULAR, 1);
@@ -843,6 +864,8 @@ copymodeaction(enum copymode_action action)
 			selextend(copyx, copyy, SEL_REGULAR, 1);
 		}
 		if ((s = getsel())) {
+			if (action == COPY_YANK_CLEAN)
+				seltrimtrailingws(s);
 			xsetsel(s);
 			xclipcopy();
 		}

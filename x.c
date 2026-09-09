@@ -62,6 +62,7 @@ typedef struct {
 
 /* function definitions used in config.h */
 static void clipcopy(const Arg *);
+static void clipcopyclean(const Arg *);
 static void clippaste(const Arg *);
 static void numlock(const Arg *);
 static void requestclose(const Arg *);
@@ -294,6 +295,18 @@ clipcopy(const Arg *dummy)
 		clipboard = XInternAtom(xw.dpy, "CLIPBOARD", 0);
 		XSetSelectionOwner(xw.dpy, clipboard, xw.win, CurrentTime);
 	}
+}
+
+void
+clipcopyclean(const Arg *dummy)
+{
+	char *str;
+
+	if ((str = getsel()) == NULL)
+		return;
+	seltrimtrailingws(str);
+	setsel(str, CurrentTime);
+	clipcopy(dummy);
 }
 
 void
@@ -569,12 +582,37 @@ propnotify(XEvent *e)
 	}
 }
 
+static size_t
+normalizepaste(const uchar *data, size_t len, char **out)
+{
+	char *buf, *dst;
+	size_t i;
+
+	buf = dst = xmalloc(len + 1);
+	for (i = 0; i < len; i++) {
+		if (data[i] == '\r') {
+			*dst++ = '\r';
+			if (i + 1 < len && data[i + 1] == '\n')
+				i++;
+		} else if (data[i] == '\n') {
+			*dst++ = '\r';
+		} else {
+			*dst++ = data[i];
+		}
+	}
+	*dst = '\0';
+	*out = buf;
+	return dst - buf;
+}
+
 void
 selnotify(XEvent *e)
 {
 	ulong nitems, ofs, rem;
 	int format;
-	uchar *data, *last, *repl;
+	uchar *data;
+	char *paste;
+	size_t pastelen;
 	Atom type, incratom, property = None;
 
 	incratom = XInternAtom(xw.dpy, "INCR", 0);
@@ -629,21 +667,18 @@ selnotify(XEvent *e)
 		/*
 		 * As seen in getsel:
 		 * Line endings are inconsistent in the terminal and GUI world
-		 * copy and pasting. When receiving some selection data,
-		 * replace all '\n' with '\r'.
+		 * copy and pasting. When receiving selection data, normalize both
+		 * Unix LF and DOS CRLF endings to terminal carriage returns.
 		 * FIXME: Fix the computer world.
 		 */
-		repl = data;
-		last = data + nitems * format / 8;
-		while ((repl = memchr(repl, '\n', last - repl))) {
-			*repl++ = '\r';
-		}
+		pastelen = normalizepaste(data, nitems * format / 8, &paste);
 
 		if (IS_SET(MODE_BRCKTPASTE) && ofs == 0)
 			ttywrite("\033[200~", 6, 0);
-		ttywrite((char *)data, nitems * format / 8, 1);
+		ttywrite(paste, pastelen, 1);
 		if (IS_SET(MODE_BRCKTPASTE) && rem == 0)
 			ttywrite("\033[201~", 6, 0);
+		free(paste);
 		XFree(data);
 		/* number of 32-bit chunks returned */
 		ofs += nitems * format / 32;
@@ -2048,6 +2083,8 @@ kpress(XEvent *ev)
 				action = COPY_HALFDOWN;
 			else if (ksym == XK_u || c == 'u')
 				action = COPY_HALFUP;
+			else if (ksym == XK_X || c == 'X')
+				action = COPY_YANK_CLEAN;
 			else if (ksym == XK_c || c == 'c')
 				action = COPY_EXIT;
 			else
@@ -2076,6 +2113,8 @@ kpress(XEvent *ev)
 			action = COPY_VISUALLINE;
 		} else if (c == 'y') {
 			action = COPY_YANK;
+		} else if (c == 'Y') {
+			action = COPY_YANK_CLEAN;
 		} else if (ksym == XK_Escape || c == 'q' || c == 'i' || c == '\r') {
 			action = COPY_EXIT;
 		} else if (c == 'g') {
