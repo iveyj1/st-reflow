@@ -281,6 +281,7 @@ static struct timespec splashstart;
 static int closewarningvisible;
 static struct timespec closewarningstart;
 static int copypendingg;
+static int copypendingcount;
 
 void
 clipcopy(const Arg *dummy)
@@ -2045,7 +2046,7 @@ kpress(XEvent *ev)
 	XKeyEvent *e = &ev->xkey;
 	KeySym ksym = NoSymbol;
 	char buf[64], *customkey;
-	int len;
+	int len, count;
 	Rune c;
 	Status status;
 	Shortcut *bp;
@@ -2074,10 +2075,19 @@ kpress(XEvent *ev)
 			return;
 		}
 		if ((e->state & Mod1Mask) && ksym == XK_Escape) {
-			copypendingg = 0;
+			copypendingg = copypendingcount = 0;
 			copymode(NULL);
 			return;
 		}
+		if (!(e->state & (ControlMask|Mod1Mask)) &&
+		    c >= '0' && c <= '9' && (c != '0' || copypendingcount)) {
+			if (copypendingcount < 1000000)
+				copypendingcount = MIN(1000000,
+				    copypendingcount * 10 + c - '0');
+			copypendingg = 0;
+			return;
+		}
+		count = copypendingcount ? copypendingcount : 1;
 		if (e->state & ControlMask) {
 			if (ksym == XK_d || c == 'd')
 				action = COPY_HALFDOWN;
@@ -2090,7 +2100,7 @@ kpress(XEvent *ev)
 			else if (ksym == XK_c || c == 'c')
 				action = COPY_EXIT;
 			else
-				return;
+				goto copyunknown;
 		} else if (ksym == XK_Left || c == 'h') {
 			action = COPY_LEFT;
 		} else if (ksym == XK_Down || c == 'j') {
@@ -2099,16 +2109,32 @@ kpress(XEvent *ev)
 			action = COPY_UP;
 		} else if (ksym == XK_Right || c == 'l') {
 			action = COPY_RIGHT;
+		} else if (c == 'w') {
+			action = COPY_WORD_FORWARD;
+		} else if (c == 'W') {
+			action = COPY_WORD_FORWARD_BIG;
+		} else if (c == 'e') {
+			action = COPY_WORD_END;
+		} else if (c == 'E') {
+			action = COPY_WORD_END_BIG;
+		} else if (c == 'b') {
+			action = COPY_WORD_BACK;
+		} else if (c == 'B') {
+			action = COPY_WORD_BACK_BIG;
 		} else if (ksym == XK_Home || c == '0') {
 			action = COPY_HOME;
+		} else if (c == '^') {
+			action = COPY_FIRSTPRINT;
 		} else if (ksym == XK_End || c == '$') {
 			action = COPY_END;
+		} else if (c == '%') {
+			action = COPY_LASTPRINT;
 		} else if (ksym == XK_Next) {
 			action = COPY_PAGEDOWN;
 		} else if (ksym == XK_Prior) {
 			action = COPY_PAGEUP;
 		} else if (c == 'G') {
-			action = COPY_BOTTOM;
+			action = copypendingcount ? COPY_GOTO_LINE : COPY_BOTTOM;
 		} else if (c == 'v') {
 			action = COPY_VISUAL;
 		} else if (c == 'V') {
@@ -2124,15 +2150,17 @@ kpress(XEvent *ev)
 				copypendingg = 1;
 				return;
 			}
-			action = COPY_TOP;
+			action = copypendingcount ? COPY_GOTO_LINE : COPY_TOP;
 		} else {
-			copypendingg = 0;
+copyunknown:
+			copypendingg = copypendingcount = 0;
 			return;
 		}
-		copypendingg = 0;
-		copymodeaction(action);
+		copypendingg = copypendingcount = 0;
+		copymodeaction(action, count);
 		return;
 	}
+	copypendingg = copypendingcount = 0;
 
 	/* 1. shortcuts */
 	for (bp = shortcuts; bp < shortcuts + LEN(shortcuts); bp++) {

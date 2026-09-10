@@ -16,6 +16,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <wctype.h>
 
 #include "st.h"
 #include "win.h"
@@ -768,6 +769,142 @@ copyextend(void)
 		selextend(copyx, copyy, copyselectiontype(), 0);
 }
 
+enum copycharclass {
+	COPYCHAR_SPACE, COPYCHAR_WORD, COPYCHAR_PUNCT
+};
+
+static int
+copycharclass(int bigword)
+{
+	Glyph *g = &TLINE(copyy)[copyx];
+
+	if (!(g->mode & ATTR_SET) || !g->u || iswspace(g->u))
+		return COPYCHAR_SPACE;
+	if (bigword || iswalnum(g->u) || g->u == L'_')
+		return COPYCHAR_WORD;
+	return COPYCHAR_PUNCT;
+}
+
+/* Move by one printable cell. Return 2 when crossing a hard line. */
+static int
+copyadvance(int direction)
+{
+	Arg a = {.i = 1};
+	int crossedhard = 0, len, oldscr;
+
+	do {
+		len = tlinelen(TLINE(copyy));
+		if (direction > 0 && len > 0 && copyx < len - 1) {
+			copyx++;
+		} else if (direction < 0 && copyx > 0) {
+			copyx--;
+		} else {
+			if (direction > 0)
+				crossedhard |= !tiswrapped(TLINE(copyy));
+			if (direction > 0 && copyy < term.row - 1) {
+				copyy++;
+			} else if (direction < 0 && copyy > 0) {
+				copyy--;
+			} else {
+				oldscr = term.scr;
+				if (direction > 0)
+					kscrolldown(&a);
+				else
+					kscrollup(&a);
+				if (term.scr == oldscr)
+					return 0;
+			}
+			len = tlinelen(TLINE(copyy));
+			copyx = direction > 0 ? 0 : MAX(len - 1, 0);
+			if (direction < 0)
+				crossedhard |= !tiswrapped(TLINE(copyy));
+		}
+	} while (TLINE(copyy)[copyx].mode & ATTR_WDUMMY);
+
+	return crossedhard ? 2 : 1;
+}
+
+static void
+copyword(int direction, int bigword, int count)
+{
+	int cls, moved;
+
+	while (count-- > 0) {
+		if (direction > 0) {
+			cls = copycharclass(bigword);
+			do {
+				moved = copyadvance(1);
+				if (!moved)
+					goto done;
+			} while (moved != 2 && cls != COPYCHAR_SPACE &&
+			    copycharclass(bigword) == cls);
+			while (copycharclass(bigword) == COPYCHAR_SPACE) {
+				if (!copyadvance(1))
+					goto done;
+			}
+		} else {
+			if (!copyadvance(-1))
+				goto done;
+			while (copycharclass(bigword) == COPYCHAR_SPACE)
+				if (!copyadvance(-1))
+					goto done;
+			cls = copycharclass(bigword);
+			while ((moved = copyadvance(-1))) {
+				if (moved == 2 || copycharclass(bigword) != cls) {
+					copyadvance(1);
+					break;
+				}
+			}
+		}
+	}
+done:
+	copyclamp();
+	copyextend();
+	tfulldirt();
+}
+
+static void
+copywordend(int bigword, int count)
+{
+	int cls, moved;
+
+	while (count-- > 0) {
+		if (!copyadvance(1))
+			goto done;
+		while (copycharclass(bigword) == COPYCHAR_SPACE)
+			if (!copyadvance(1))
+				goto done;
+		cls = copycharclass(bigword);
+		while ((moved = copyadvance(1))) {
+			if (moved == 2 || copycharclass(bigword) != cls) {
+				copyadvance(-1);
+				break;
+			}
+		}
+	}
+done:
+	copyclamp();
+	copyextend();
+	tfulldirt();
+}
+
+static void
+copyprintable(int last)
+{
+	Line line = TLINE(copyy);
+	int i, len = tlinelen(line);
+
+	copyx = 0;
+	for (i = last ? len - 1 : 0; BETWEEN(i, 0, len - 1);
+	    i += last ? -1 : 1) {
+		if ((line[i].mode & ATTR_SET) && !(line[i].mode & ATTR_WDUMMY) &&
+		    line[i].u && iswgraph(line[i].u)) {
+			copyx = i;
+			break;
+		}
+	}
+}
+
 static void
 copymove(int dx, int dy)
 {
@@ -806,7 +943,7 @@ copymode(const Arg *arg)
 	if (IS_SET(MODE_ALTSCREEN))
 		return;
 	if (copyactive) {
-		copymodeaction(COPY_EXIT);
+		copymodeaction(COPY_EXIT, 1);
 		return;
 	}
 
@@ -819,25 +956,49 @@ copymode(const Arg *arg)
 }
 
 void
-copymodeaction(enum copymode_action action)
+copymodeaction(enum copymode_action action, int count)
 {
 	Arg a;
 	char *s;
+	int i;
 
 	if (!copyactive)
 		return;
+	count = MAX(count, 1);
 
 	switch (action) {
-	case COPY_LEFT:       copymove(-1, 0); return;
-	case COPY_DOWN:       copymove(0, 1); return;
-	case COPY_UP:         copymove(0, -1); return;
-	case COPY_RIGHT:      copymove(1, 0); return;
+	case COPY_LEFT:       copymove(-count, 0); return;
+	case COPY_DOWN:       copymove(0, count); return;
+	case COPY_UP:         copymove(0, -count); return;
+	case COPY_RIGHT:      copymove(count, 0); return;
+	case COPY_WORD_FORWARD:     copyword(1, 0, count); return;
+	case COPY_WORD_FORWARD_BIG: copyword(1, 1, count); return;
+	case COPY_WORD_END:         copywordend(0, count); return;
+	case COPY_WORD_END_BIG:     copywordend(1, count); return;
+	case COPY_WORD_BACK:        copyword(-1, 0, count); return;
+	case COPY_WORD_BACK_BIG:    copyword(-1, 1, count); return;
 	case COPY_HOME:       copyx = 0; break;
-	case COPY_END:        copyx = term.col - 1; copyclamp(); break;
-	case COPY_HALFDOWN:   copymove(0, MAX(term.row / 2, 1)); return;
-	case COPY_HALFUP:     copymove(0, -MAX(term.row / 2, 1)); return;
-	case COPY_PAGEDOWN:   copymove(0, MAX(term.row - 1, 1)); return;
-	case COPY_PAGEUP:     copymove(0, -MAX(term.row - 1, 1)); return;
+	case COPY_FIRSTPRINT: copyprintable(0); break;
+	case COPY_END:
+		if (count > 1)
+			copymove(0, count - 1);
+		copyx = term.col - 1; copyclamp(); break;
+	case COPY_LASTPRINT:
+		if (count > 1)
+			copymove(0, count - 1);
+		copyprintable(1); break;
+	case COPY_HALFDOWN:
+		for (i = 0; i < count; i++) copymove(0, MAX(term.row / 2, 1));
+		return;
+	case COPY_HALFUP:
+		for (i = 0; i < count; i++) copymove(0, -MAX(term.row / 2, 1));
+		return;
+	case COPY_PAGEDOWN:
+		for (i = 0; i < count; i++) copymove(0, MAX(term.row - 1, 1));
+		return;
+	case COPY_PAGEUP:
+		for (i = 0; i < count; i++) copymove(0, -MAX(term.row - 1, 1));
+		return;
 	case COPY_TOP:
 		a.i = HISTSIZE;
 		kscrollup(&a);
@@ -850,6 +1011,14 @@ copymodeaction(enum copymode_action action)
 		copyx = term.c.x;
 		copyy = term.c.y;
 		copyclamp();
+		break;
+	case COPY_GOTO_LINE:
+		a.i = HISTSIZE;
+		kscrollup(&a);
+		copyx = copyy = 0;
+		copyclamp();
+		if (count > 1)
+			copymove(0, count - 1);
 		break;
 	case COPY_VISUAL:
 	case COPY_VISUALLINE:
@@ -3171,7 +3340,7 @@ tresize(int col, int row)
 	int *bp;
 
 	if (copyactive && (col != term.col || row != term.row))
-		copymodeaction(COPY_EXIT);
+		copymodeaction(COPY_EXIT, 1);
 
 	/* col and row are always MAX(_, 1)
 	if (col < 1 || row < 1) {

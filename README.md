@@ -66,10 +66,15 @@ sudo make install
 | Key | Action |
 |---|---|
 | `h/j/k/l`, arrows | Move by cell/row |
-| `0`, `$`, Home, End | Start/end of displayed row |
+| `w/e/b` | Next word / word end / previous word; punctuation is separate |
+| `W/E/B` | Next WORD / WORD end / previous whitespace-delimited WORD |
+| `0` / `^` | First column / first printable character of the row |
+| `$` / `%` | End of row / last printable character of the row |
 | `gg` / `G` | Oldest history / live cursor |
+| `[count]gg`, `[count]G` | Go to physical history row `count` |
 | `Ctrl+u/d` | Half page up/down |
 | PageUp/PageDown | Full page up/down |
+| Numeric prefix | Repeat movement commands, for example `5j`, `3w`, or `2$` |
 | `v` / `V` | Characterwise / logical-line selection |
 | `y` | Yank selection or current logical line to PRIMARY and CLIPBOARD |
 | Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode |

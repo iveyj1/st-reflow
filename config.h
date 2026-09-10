@@ -222,6 +222,17 @@ static MouseShortcut mshortcuts[] = {
 	{ XK_ANY_MOD,           Button5, ttysend,        {.s = "\005"} },
 };
 
+/* xmodmap modifier map:
+ * shift:   Shift_L, Shift_R
+ * lock:    Caps_Lock
+ * control: Control_L, Control_R
+ * mod1:    Alt_L, Alt_R, Meta_L
+ * mod2:    Num_Lock
+ * mod3:    ISO_Level5_Shift
+ * mod4:    Super_L, Super_R, Hyper_L
+ * mod5:    ISO_Level3_Shift
+ */
+
 /* Internal keyboard shortcuts.
  * Modifier names used below:
  * MODKEY      = Alt (Mod1Mask)
