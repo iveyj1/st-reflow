@@ -1,0 +1,15 @@
+#!/bin/sh
+# Copy a selected nonempty logical line from st's externalpipe history.
+set -eu
+lines=$(awk 'NF')
+[ -n "$lines" ] || exit 0
+choice=$(printf '%s\n' "$lines" | dmenu -l 10 -p 'Copy line') || exit 0
+[ -n "$choice" ] || exit 0
+if command -v xclip >/dev/null 2>&1; then
+	printf '%s' "$choice" | xclip -selection clipboard
+elif command -v xsel >/dev/null 2>&1; then
+	printf '%s' "$choice" | xsel -ib
+else
+	echo 'st-copyout: install xclip or xsel' >&2
+	exit 1
+fi

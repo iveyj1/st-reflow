@@ -9,7 +9,7 @@ Personal `st` build for X, based on suckless `st` 0.9.2 plus upstream fixes thro
 - Keyboard/mouse scrollback, clipboard paste/copy, font zoom, anysize, Xresources at startup.
 - Geometric box drawing, no bright-on-bold, OSC 52 window operations enabled.
 - Startup splash and Alt-F4 close warning drawn as X overlays, never terminal text.
-- Reflow-aware external pipe helpers for URL open/copy and command-output copy.
+- Reflow-aware external pipe helpers for URL open/copy and selecting a history line to copy.
 - Vim-style keyboard copy mode that can navigate and yank offscreen scrollback.
 - Terminfo `E3` / `CSI 3 J` clears saved scrollback; unsupported OSC 8 and modern Vim probes are handled quietly.
 - Stock fontconfig fallback; no Font2 or HarfBuzz/ligatures.
@@ -18,7 +18,19 @@ Patch/source details are in [PATCHES.md](PATCHES.md).
 
 ## Build and install
 
-Dependencies: C99 compiler, make, pkg-config, Xlib, Xft, fontconfig, FreeType.
+Dependencies: C99 compiler, make, pkg-config, Xlib, Xft, fontconfig, FreeType, tic.
+
+`make install` also installs `st-urlhandler` and `st-copyout`. These need dmenu
+and either xclip or xsel; opening URLs additionally needs xdg-open (xdg-utils).
+The helpers are standalone and do not load any shared session/profile framework.
+`st-copyout` selects one nonempty logical history line, not a whole command-output
+region. Use keyboard copy mode for multiline selections. The URL helper recognizes
+plain HTTP(S) URLs; parenthesized URL components are not supported.
+
+Terminfo installs to `$(PREFIX)/share/terminfo`, including under DESTDIR when
+staging. Override `TERMINFO_DIR` if necessary; a nonstandard prefix may require
+setting TERMINFO for client applications. Verify with `infocmp st-256color`.
+Uninstall leaves terminfo entries in place because other st builds may use them.
 
 ```sh
 make clean
@@ -56,7 +68,7 @@ sudo make install
 | `Shift` + mouse wheel | Send PageUp/PageDown to the application |
 | `Alt+Escape` | Enter/leave keyboard copy mode |
 | `Alt+l` / `Alt+y` | Choose URL from history and open/copy it |
-| `Alt+o` | Choose command output and copy it |
+| `Alt+o` | Choose a nonempty history line and copy it |
 | `Alt+F4` | Close; confirm if a process is running |
 
 ## Keyboard copy mode

@@ -6,6 +6,8 @@ include config.mk
 
 SRC = st.c x.c boxdraw.c
 OBJ = $(SRC:.c=.o)
+HELPERS = st-urlhandler st-copyout
+TERMINFO_DIR = $(PREFIX)/share/terminfo
 
 # Recreate buildinfo.h when the checked-out commit changes.  Follow the
 # symbolic ref when possible; detached checkouts are covered by HEAD itself.
@@ -48,24 +50,29 @@ clean:
 dist: clean
 	$(MAKE) buildinfo.h
 	mkdir -p st-$(VERSION)
-	cp -R FAQ LEGACY TODO LICENSE Makefile README config.mk\
-		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h $(SRC)\
+	cp -R FAQ LEGACY LICENSE Makefile README.md PATCHES.md config.mk\
+		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h boxdraw_data.h $(SRC) $(HELPERS) tests\
 		st-$(VERSION)
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
 
 install: st
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	cp -f st $(DESTDIR)$(PREFIX)/bin
-	chmod 755 $(DESTDIR)$(PREFIX)/bin/st
+	cp -f st $(HELPERS) $(DESTDIR)$(PREFIX)/bin
+	chmod 755 $(DESTDIR)$(PREFIX)/bin/st $(HELPERS:%=$(DESTDIR)$(PREFIX)/bin/%)
 	mkdir -p $(DESTDIR)$(MANPREFIX)/man1
 	sed "s/VERSION/$(VERSION)/g" < st.1 > $(DESTDIR)$(MANPREFIX)/man1/st.1
 	chmod 644 $(DESTDIR)$(MANPREFIX)/man1/st.1
-	tic -sx st.info
+	mkdir -p $(DESTDIR)$(TERMINFO_DIR)
+	tic -sx -o $(DESTDIR)$(TERMINFO_DIR) st.info
 	@echo Please see README.md regarding the terminfo entry of st.
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/st
+	rm -f $(DESTDIR)$(PREFIX)/bin/st $(HELPERS:%=$(DESTDIR)$(PREFIX)/bin/%)
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
 
-.PHONY: all clean dist install uninstall
+check:
+	@for f in $(HELPERS); do sh -n "$$f" || exit; done
+	python3 tests/helpers.py
+
+.PHONY: all clean dist install uninstall check

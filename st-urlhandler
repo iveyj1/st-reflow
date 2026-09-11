@@ -1,0 +1,29 @@
+#!/bin/sh
+# Select a URL from st's externalpipe history; open it or copy to CLIPBOARD.
+set -eu
+mode=${1:--o}
+if [ "$#" -gt 1 ]; then
+	echo 'usage: st-urlhandler [-o|-c]' >&2
+	exit 2
+fi
+case $mode in -o|-c) ;; *) echo 'usage: st-urlhandler [-o|-c]' >&2; exit 2;; esac
+urls=$(grep -Eao "https?://[^[:space:]<>\"'()]+" | sed 's/[),.;]*$//' | awk '!seen[$0]++')
+[ -n "$urls" ] || exit 0
+url=$(printf '%s\n' "$urls" | dmenu -l 10 -p URL) || exit 0
+[ -n "$url" ] || exit 0
+# dmenu permits arbitrary input; never hand other schemes to xdg-open.
+case $url in http://?*|https://?*) ;; *) echo 'st-urlhandler: expected an HTTP(S) URL' >&2; exit 1;; esac
+case $mode in
+	-c)
+		if command -v xclip >/dev/null 2>&1; then
+			printf '%s' "$url" | xclip -selection clipboard
+		elif command -v xsel >/dev/null 2>&1; then
+			printf '%s' "$url" | xsel -ib
+		else
+			echo 'st-urlhandler: install xclip or xsel' >&2
+			exit 1
+		fi ;;
+	-o)
+		command -v xdg-open >/dev/null 2>&1 || { echo 'st-urlhandler: install xdg-utils' >&2; exit 1; }
+		exec xdg-open "$url" ;;
+esac
