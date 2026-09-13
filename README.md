@@ -20,6 +20,13 @@ Patch/source details are in [PATCHES.md](PATCHES.md).
 
 Dependencies: C99 compiler, make, pkg-config, Xlib, Xft, fontconfig, FreeType, tic.
 
+Mint packages: build-essential, pkg-config, libx11-dev, libxft-dev,
+libfontconfig-dev, libfreetype-dev, ncurses-bin. Void equivalents: base-devel,
+pkgconf, libX11-devel, libXft-devel, fontconfig-devel, freetype-devel, ncurses.
+No distro identification, dwm, or shared session launcher is required. The
+terminal works independently under other X window managers; menu/clipboard
+programs below are dependencies only of the optional external helpers.
+
 `make install` also installs `st-urlhandler` and `st-copyout`. These need dmenu
 and either xclip or xsel; opening URLs additionally needs xdg-open (xdg-utils).
 The helpers are standalone and do not load any shared session/profile framework.
