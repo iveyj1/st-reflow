@@ -9,7 +9,9 @@ fi
 case $mode in -o|-c) ;; *) echo 'usage: st-urlhandler [-o|-c]' >&2; exit 2;; esac
 urls=$(grep -Eao "https?://[^[:space:]<>\"'()]+" | sed 's/[),.;]*$//' | awk '!seen[$0]++')
 [ -n "$urls" ] || exit 0
-url=$(printf '%s\n' "$urls" | dmenu -l 10 -p URL) || exit 0
+menu=dmenu
+command -v dmenu-font >/dev/null 2>&1 && menu=dmenu-font
+url=$(printf '%s\n' "$urls" | "$menu" -l 10 -p URL) || exit 0
 [ -n "$url" ] || exit 0
 # dmenu permits arbitrary input; never hand other schemes to xdg-open.
 case $url in http://?*|https://?*) ;; *) echo 'st-urlhandler: expected an HTTP(S) URL' >&2; exit 1;; esac

@@ -30,6 +30,9 @@ programs below are dependencies only of the optional external helpers.
 `make install` also installs `st-urlhandler` and `st-copyout`. These need dmenu
 and either xclip or xsel; opening URLs additionally needs xdg-open (xdg-utils).
 The helpers are standalone and do not load any shared session/profile framework.
+They prefer the optional `dmenu-font` wrapper from the dmenu repository, which
+reads `dmenu.font` from Xresources, and fall back to plain dmenu. Terminal font
+and menu font are separate resources; both can be size 11 without a rebuild.
 `st-copyout` selects one nonempty logical history line, not a whole command-output
 region. Use keyboard copy mode for multiline selections. The URL helper recognizes
 plain HTTP(S) URLs; parenthesized URL components are not supported.
@@ -50,7 +53,7 @@ sudo make install
 
 ## Defaults
 
-- Font: `JetBrainsMono Nerd Font Mono:size=12`
+- Font fallback: `JetBrainsMono Nerd Font Mono:size=11` (`st.font` Xresource or `st -f` overrides it)
 - Geometry: `120x42`
 - Focused opacity: `0.8`
 - Unfocused opacity: `0.5`

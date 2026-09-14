@@ -3,7 +3,9 @@
 set -eu
 lines=$(awk 'NF')
 [ -n "$lines" ] || exit 0
-choice=$(printf '%s\n' "$lines" | dmenu -l 10 -p 'Copy line') || exit 0
+menu=dmenu
+command -v dmenu-font >/dev/null 2>&1 && menu=dmenu-font
+choice=$(printf '%s\n' "$lines" | "$menu" -l 10 -p 'Copy line') || exit 0
 [ -n "$choice" ] || exit 0
 if command -v xclip >/dev/null 2>&1; then
 	printf '%s' "$choice" | xclip -selection clipboard

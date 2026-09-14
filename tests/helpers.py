@@ -45,6 +45,15 @@ class Helpers(unittest.TestCase):
         self.assertEqual((self.base / 'out').read_text(), '  selected line')
         self.assertEqual((self.base / 'menu-input').read_text(), 'first\n  selected line\nlast')
 
+    def test_optional_font_wrapper(self):
+        self.mock('dmenu-font', 'echo wrapper > "$OUT.wrapper"; exec dmenu "$@"')
+        for helper, data in [('st-copyout', 'hello\n'),
+                             ('st-urlhandler', 'https://example.org\n')]:
+            result = self.run_helper(helper, data)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.base / 'out.wrapper').read_text(), 'wrapper\n')
+            (self.base / 'out.wrapper').unlink()
+
     def test_url_selection(self):
         result = self.run_helper('st-urlhandler',
                                  'https://example.org/a. https://example.org/a\nhttp://other.test\n',
