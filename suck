@@ -1,0 +1,43 @@
+#!/bin/sh
+# Run a common operation in each local suckless repository.
+
+set -u
+
+command=${1:-make}
+if [ "$#" -gt 1 ]; then
+	printf 'usage: %s [make|pull|status|lg]\n' "$0" >&2
+	exit 2
+fi
+
+case $command in
+	make|pull|status|lg) ;;
+	*)
+		printf 'usage: %s [make|pull|status|lg]\n' "$0" >&2
+		exit 2
+		;;
+esac
+
+root=$PWD
+repos='st-reflow dwm dwmblocks dmenu configure-sl'
+result=0
+
+for repo in $repos; do
+	printf '\n*** %s: %s ***\n\n' "$repo" "$command"
+	if [ ! -d "$root/$repo" ]; then
+		printf '%s: directory not found\n' "$root/$repo" >&2
+		result=1
+		continue
+	fi
+
+	(
+		cd "$root/$repo" || exit 1
+		case $command in
+			make)   make clean && make && sudo make install ;;
+			pull)   git pull ;;
+			status) git status ;;
+			lg)     lazygit ;;
+		esac
+	) || result=1
+done
+
+exit "$result"
