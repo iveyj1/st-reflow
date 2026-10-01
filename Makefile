@@ -74,5 +74,6 @@ uninstall:
 check:
 	@for f in $(HELPERS); do sh -n "$$f" || exit; done
 	python3 tests/helpers.py
+	python3 tests/copy_exit.py
 
 .PHONY: all clean dist install uninstall check

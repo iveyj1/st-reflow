@@ -1046,9 +1046,9 @@ copymodeaction(enum copymode_action action, int count)
 				seltrimtrailingws(s);
 			xsetsel(s);
 			xclipcopy();
+			copyactive = copyvisual = 0;
+			selclear();
 		}
-		copyvisual = 0;
-		selclear();
 		break;
 	case COPY_EXIT:
 		copyactive = copyvisual = 0;

@@ -286,16 +286,13 @@ static int copypendingcount;
 void
 clipcopy(const Arg *dummy)
 {
-	Atom clipboard;
-
-	free(xsel.clipboard);
-	xsel.clipboard = NULL;
-
-	if (xsel.primary != NULL) {
-		xsel.clipboard = xstrdup(xsel.primary);
-		clipboard = XInternAtom(xw.dpy, "CLIPBOARD", 0);
-		XSetSelectionOwner(xw.dpy, clipboard, xw.win, CurrentTime);
-	}
+	if (xsel.primary == NULL)
+		return;
+	xclipcopy();
+	if (copymodeactive())
+		copymodeaction(COPY_EXIT, 1);
+	else
+		selclear();
 }
 
 void
@@ -695,7 +692,17 @@ selnotify(XEvent *e)
 void
 xclipcopy(void)
 {
-	clipcopy(NULL);
+	Atom clipboard;
+
+	/* Internal copies (including OSC 52) must not alter selection mode. */
+	free(xsel.clipboard);
+	xsel.clipboard = NULL;
+
+	if (xsel.primary != NULL) {
+		xsel.clipboard = xstrdup(xsel.primary);
+		clipboard = XInternAtom(xw.dpy, "CLIPBOARD", 0);
+		XSetSelectionOwner(xw.dpy, clipboard, xw.win, CurrentTime);
+	}
 }
 
 void
