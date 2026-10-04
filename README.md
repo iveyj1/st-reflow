@@ -2,6 +2,15 @@
 
 Personal `st` build for X, based on suckless `st` 0.9.2 plus upstream fixes through `04ce0d6`. The main goal is reliable primary-screen scrollback with width reflow.
 
+## Change-size history
+
+See [the fork history report](scripts/cloc_by_commit.md) for per-change runtime
+and support cloc counts, including upstream merges. After editing, run
+`python3 scripts/update_cloc_by_commit.py` (Python 3.9+, git, cloc required).
+It prints latest totals/deltas and includes pending changes separately.
+Use `--check` to detect stale reports; regenerate after committing.
+See AGENTS.md for the maintenance policy.
+
 ## Features
 
 - Scrollback history with reflow on resize; retained output keeps hard/soft line boundaries.
