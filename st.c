@@ -940,8 +940,7 @@ void
 copymode(const Arg *arg)
 {
 	(void)arg;
-	if (IS_SET(MODE_ALTSCREEN))
-		return;
+	/* Alternate-screen navigation stays visible: kscrollup/down are no-ops. */
 	if (copyactive) {
 		copymodeaction(COPY_EXIT, 1);
 		return;
@@ -1561,6 +1560,10 @@ tswapscreen(void)
 	static int altcol, altrow;
 	Line *tmpline = term.line;
 	int tmpcol = term.col, tmprow = term.row;
+
+	/* The copy cursor and selection belong to the screen being left. */
+	if (copyactive)
+		copymodeaction(COPY_EXIT, 1);
 
 	term.line = altline;
 	term.col = altcol, term.row = altrow;

@@ -83,7 +83,11 @@ sudo make install
 
 ## Keyboard copy mode
 
-`Alt+Escape` enters primary-screen copy mode. It consumes input locally and is disabled on the alternate screen. Resize exits copy mode. Successful `y`, `Y`, or `Ctrl+Shift+X` copies also exit
+`Alt+Escape` enters copy mode on either screen and consumes input locally.
+On the alternate screen, navigation is limited to visible rows (no scrollback);
+`gg` goes to the top visible row and counted `gg/G` addresses visible rows.
+The application continues updating the display; copy mode does not freeze it.
+Resize or switching screens exits copy mode. Successful `y`, `Y`, or `Ctrl+Shift+X` copies also exit
 copy mode and clear the selection highlight, without changing scrollback position.
 Outside copy mode, `Ctrl+Shift+C/X` clears the highlight after copying. PRIMARY
 and CLIPBOARD remain available for pasting. Mouse selection alone is unchanged;
