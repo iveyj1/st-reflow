@@ -4,7 +4,7 @@ Personal `st` build for X, based on suckless `st` 0.9.2 plus upstream fixes thro
 
 ## Change-size history
 
-See [the fork history report](scripts/cloc_by_commit.md) for per-change runtime
+Generate the gitignored local report `scripts/cloc_by_commit.md` for per-change runtime
 and support cloc counts, including upstream merges. After editing, run
 `python3 scripts/update_cloc_by_commit.py` (Python 3.9+, git, cloc required).
 It prints latest totals/deltas and includes pending changes separately.

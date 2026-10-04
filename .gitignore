@@ -3,3 +3,4 @@
 /st-*.tar.gz
 /buildinfo.h
 /buildinfo.h.tmp
+/scripts/cloc_by_commit.md
