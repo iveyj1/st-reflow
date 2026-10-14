@@ -1811,6 +1811,26 @@ xstartdraw(void)
 	return IS_SET(MODE_VISIBLE);
 }
 
+/* Paint only the backing pixmap: numbers never enter selections or history. */
+void
+xdrawcopynumber(int y, int distance, int rows, int cols)
+{
+	char text[32];
+	Glyph glyphs[32];
+	Glyph base = {.mode = 0, .fg = 8, .bg = defaultbg};
+	int width, len, i, n;
+
+	width = snprintf(text, sizeof text, "%d", MAX(rows - 1, 1));
+	len = snprintf(text, sizeof text, "%*d ", width, distance);
+	len = MIN(len, cols);
+	for (i = 0; i < len; i++) {
+		glyphs[i] = base;
+		glyphs[i].u = text[i];
+	}
+	n = xmakeglyphfontspecs(xw.specbuf, glyphs, len, 0, y);
+	xdrawglyphfontspecs(xw.specbuf, base, n, 0, y);
+}
+
 void
 xdrawline(Line line, int x1, int y1, int x2)
 {
@@ -2142,6 +2162,8 @@ kpress(XEvent *ev)
 			action = COPY_PAGEUP;
 		} else if (c == 'G') {
 			action = copypendingcount ? COPY_GOTO_LINE : COPY_BOTTOM;
+		} else if (c == 'n') {
+			action = COPY_NUMBERS;
 		} else if (c == 'v') {
 			action = COPY_VISUAL;
 		} else if (c == 'V') {

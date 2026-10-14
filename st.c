@@ -265,6 +265,7 @@ static ssize_t xwrite(int, const char *, size_t);
 static Term term;
 static Selection sel;
 static int copyactive, copyvisual, copyx, copyy;
+static int copynumbers = 1;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
@@ -1018,6 +1019,9 @@ copymodeaction(enum copymode_action action, int count)
 		copyclamp();
 		if (count > 1)
 			copymove(0, count - 1);
+		break;
+	case COPY_NUMBERS:
+		copynumbers = !copynumbers;
 		break;
 	case COPY_VISUAL:
 	case COPY_VISUALLINE:
@@ -3624,6 +3628,8 @@ drawregion(int x1, int y1, int x2, int y2)
 
 		term.dirty[y] = 0;
 		xdrawline(TLINE(y), x1, y, x2);
+		if (copyactive && copynumbers && y != copyy)
+			xdrawcopynumber(y, abs(y - copyy), term.row, term.col);
 	}
 }
 

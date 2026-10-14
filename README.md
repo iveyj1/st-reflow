@@ -93,6 +93,10 @@ sudo make install
 ## Keyboard copy mode
 
 `Alt+Escape` enters copy mode on either screen and consumes input locally.
+Relative physical-row numbers overlay the left edge, except on the copy cursor
+row, which is left unobscured. Press `n` in copy mode to toggle numbers; they
+start enabled and the setting persists for the terminal session. Numbers are
+rendering only: they do not affect copied text, history, or terminal geometry.
 On the alternate screen, navigation is limited to visible rows (no scrollback);
 `gg` goes to the top visible row and counted `gg/G` addresses visible rows.
 The application continues updating the display; copy mode does not freeze it.
