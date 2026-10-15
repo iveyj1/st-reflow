@@ -2097,6 +2097,10 @@ kpress(XEvent *ev)
 		enum copymode_action action;
 		char c = len == 1 ? buf[0] : 0;
 
+		/* Shift for counted uppercase motions must not discard the prefix. */
+		if (IsModifierKey(ksym))
+			return;
+
 		if ((e->state & Mod1Mask) && ksym == XK_F4) {
 			requestclose(NULL);
 			return;
