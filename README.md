@@ -43,7 +43,8 @@ They prefer the optional `dmenu-font` wrapper from the dmenu repository, which
 reads `dmenu.font` from Xresources, and fall back to plain dmenu. Terminal font
 and menu font are separate resources; both can be size 11 without a rebuild.
 `st-copyout` selects one nonempty logical history line, not a whole command-output
-region. Use keyboard copy mode for multiline selections. The URL helper recognizes
+region. Use keyboard copy mode for multiline selections. On the alternate screen,
+these helpers see only the currently visible rows. The URL helper recognizes
 plain HTTP(S) URLs; parenthesized URL components are not supported.
 
 Terminfo installs to `$(PREFIX)/share/terminfo`, including under DESTDIR when

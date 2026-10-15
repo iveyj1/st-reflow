@@ -2754,7 +2754,7 @@ externalpipe(const Arg *arg)
 	Line line;
 	char *bp;
 
-	if (!argv || !argv[0] || IS_SET(MODE_ALTSCREEN) || pipe(fd) < 0)
+	if (!argv || !argv[0] || pipe(fd) < 0)
 		return;
 
 	switch (fork()) {
@@ -2777,13 +2777,17 @@ externalpipe(const Arg *arg)
 	oldsigpipe = signal(SIGPIPE, SIG_IGN);
 	buf = xmalloc(term.col * UTF_SIZ);
 
-	/* Omit unused rows below the last visible text. */
-	for (end = term.row - 1; end >= -term.histf; end--)
+	/* Omit unused rows below the last visible text.
+	 * The normal screen includes scrollback; alternate screen has no st scrollback,
+	 * so expose only currently visible rows from curses/TUI programs.
+	 */
+	int start = IS_SET(MODE_ALTSCREEN) ? 0 : -term.histf;
+	for (end = term.row - 1; end >= start; end--)
 		if (tlinelen(TLINEABS(end)) != 0)
 			break;
 
 	wrapped = 0;
-	for (y = -term.histf; y <= end; y++) {
+	for (y = start; y <= end; y++) {
 		line = TLINEABS(y);
 		len = tlinelen(line);
 		if (len > 0) {
