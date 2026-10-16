@@ -82,6 +82,7 @@ tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win
 check: tests/harness/driver
 	@for f in $(HELPERS); do sh -n "$$f" || exit; done
 	python3 tests/helpers.py
+	python3 tests/copykeys.py
 	./tests/harness/driver
 
 .PHONY: all clean dist install uninstall check
