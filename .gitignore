@@ -1,4 +1,5 @@
 *.o
+/config.h
 /st
 /st-*.tar.gz
 /buildinfo.h

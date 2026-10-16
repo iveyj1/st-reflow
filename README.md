@@ -54,12 +54,11 @@ Uninstall leaves terminfo entries in place because other st builds may use them.
 
 ```sh
 make clean
-rm -f config.h
 make
 sudo make install
 ```
 
-`config.h` is generated from `config.def.h`; this repo tracks both, so keep them synchronized. Existing terminal windows keep running the old binary until restarted.
+Edit `config.def.h` only. `config.h` is ignored and regenerated automatically when the template changes. Existing terminal windows keep running the old binary until restarted.
 
 ## Defaults
 

@@ -29,8 +29,8 @@ buildinfo.h: $(GITHEAD) $(GITREF) Makefile
 	if test -r $@ && cmp -s $@.tmp $@; then rm -f $@.tmp; \
 	else mv -f $@.tmp $@; fi
 
-config.h:
-	cp config.def.h config.h
+config.h: config.def.h
+	cp config.def.h $@
 
 .c.o:
 	$(CC) $(STCFLAGS) -c $<
