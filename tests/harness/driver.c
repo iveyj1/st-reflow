@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <locale.h>
+#include <time.h>
 
 typedef union {
 	size_t size;
@@ -58,6 +59,7 @@ harnessrealloc(void *ptr, size_t n)
 #undef realloc
 #undef free
 
+#include "../../paste.h"
 extern char *lastselection;
 extern int clipboardcopies;
 
@@ -97,7 +99,7 @@ resize(int col, int row)
 static int
 copyrow(void)
 {
-	return copyy;
+	return copyview();
 }
 
 static void
@@ -136,6 +138,102 @@ testcopy(void)
 }
 
 static void
+teststream(void)
+{
+	char before[128], after[128];
+	int back, visual, i;
+	long long position;
+	Arg a = {.i = 3};
+
+	for (back = 0; back < 2; back++) {
+		for (visual = 0; visual < 2; visual++) {
+			feed("\033[3J\033[2J\033[H");
+			for (i = 0; i < 20; i++) {
+				snprintf(before, sizeof before, "row %03d\r\n", i);
+				feed(before);
+			}
+			if (back)
+				kscrollup(&a);
+			copymode(NULL);
+			copymodeaction(COPY_UP, 2);
+			copymodeaction(COPY_HOME, 1);
+			rowtext(copyrow(), before, sizeof before);
+			position = copyy;
+			{
+				int scr = term.scr;
+				feed("\033[6n");
+				assert(term.scr == scr);
+				ttyinput("ignored paste", 13, 1);
+				assert(term.scr == scr);
+			}
+			if (visual) {
+				copymodeaction(COPY_VISUAL, 1);
+				copymodeaction(COPY_END, 1);
+			}
+			feed("new 1\r\nnew 2\r\nnew 3\r\n");
+			rowtext(copyrow(), after, sizeof after);
+			assert(copyy == position && !strcmp(before, after));
+			copymodeaction(COPY_YANK_CLEAN, 1);
+			assert(!strncmp(lastselection, before, strlen(before)));
+		}
+	}
+}
+
+static void
+testoverwrite(void)
+{
+	Arg a = {.i = 3};
+
+	feed("\033[H");
+	kscrollup(&a);
+	assert(term.scr > 0);
+	selstart(0, term.scr, 0);
+	selextend(1, term.scr, SEL_REGULAR, 0);
+	selextend(1, term.scr, SEL_REGULAR, 1);
+	assert(selected(0, term.scr));
+	feed("Z");
+	assert(sel.ob.x == -1);
+}
+
+static void
+testpaste(void)
+{
+	char *out;
+	const unsigned char text[] = "a\r\nb\nc\033[201~d\033[200~e";
+	size_t n;
+
+	n = normalizepaste(text, sizeof text - 1, &out, 1);
+	assert(n == 7 && !strcmp(out, "a\rb\rcde"));
+	harnessfree(out);
+	normalizepaste(text, sizeof text - 1, &out, 0);
+	assert(strstr(out, "\033[201~"));
+	harnessfree(out);
+}
+
+static void
+testmouse(void)
+{
+	int i;
+
+	feed("\033[3J\033[2J\033[Habcdef\r\nghijkl");
+	copymode(NULL);
+	copymodemouse(1, 0, 0);
+	assert(copyx == 1 && copyview() == 0 && !copyvisual);
+	copymodemouse(3, 0, 1);
+	assert(copyvisual == COPY_CHAR);
+	copymodeaction(COPY_YANK, 1);
+	assert(!strcmp(lastselection, "bcd"));
+	copymode(NULL);
+	copymodemouse(0, 0, 0);
+	copymodeaction(COPY_VISUAL, 1);
+	for (i = 0; i < HISTSIZE + 20; i++)
+		feed("more\r\n");
+	assert(!copyvisual);
+	copymodeaction(COPY_YANK, 1);
+	assert(!copymodeactive());
+}
+
+static void
 testreflow(void)
 {
 	char line[118];
@@ -163,10 +261,30 @@ testreflow(void)
 	assert(allocated <= baseline + 4096);
 }
 
+static void
+testexternalpipe(void)
+{
+	char *command[] = {"/bin/sh", "-c", "sleep 1", NULL};
+	Arg a = {.v = command};
+	struct timespec before, after;
+	double elapsed;
+
+	clock_gettime(CLOCK_MONOTONIC, &before);
+	externalpipe(&a);
+	clock_gettime(CLOCK_MONOTONIC, &after);
+	elapsed = after.tv_sec - before.tv_sec +
+	    (after.tv_nsec - before.tv_nsec) / 1e9;
+	assert(elapsed < 0.5);
+	while (waitpid(-1, NULL, 0) > 0)
+		;
+}
+
 int
 main(void)
 {
 	setlocale(LC_CTYPE, "");
+	cmdfd = open("/dev/null", O_WRONLY);
+	assert(cmdfd >= 0);
 	tnew(120, 24);
 	selinit();
 	/* Empty rows below the cursor must be freed when replaced by reflow. */
@@ -178,7 +296,12 @@ main(void)
 	}
 	resize(40, 6);
 	testcopy();
+	teststream();
+	testpaste();
+	testoverwrite();
+	testmouse();
 	testreflow();
+	testexternalpipe();
 	puts("headless terminal tests passed");
 	return 0;
 }

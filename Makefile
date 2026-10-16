@@ -4,7 +4,7 @@
 
 include config.mk
 
-SRC = st.c x.c boxdraw.c
+SRC = st.c x.c boxdraw.c paste.c
 OBJ = $(SRC:.c=.o)
 HELPERS = st-urlhandler st-copyout
 TERMINFO_DIR = $(PREFIX)/share/terminfo
@@ -36,7 +36,8 @@ config.h:
 	$(CC) $(STCFLAGS) -c $<
 
 st.o: config.h st.h win.h
-x.o: arg.h buildinfo.h config.h st.h win.h
+x.o: arg.h buildinfo.h config.h st.h win.h paste.h
+paste.o: paste.h
 boxdraw.o: config.h st.h boxdraw_data.h
 
 $(OBJ): config.h config.mk
@@ -51,7 +52,7 @@ dist: clean
 	$(MAKE) buildinfo.h
 	mkdir -p st-$(VERSION)
 	cp -R FAQ LEGACY LICENSE Makefile README.md PATCHES.md config.mk\
-		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h boxdraw_data.h $(SRC) $(HELPERS) tests\
+		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h paste.h boxdraw_data.h $(SRC) $(HELPERS) tests\
 		st-$(VERSION)
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
@@ -71,8 +72,8 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/st $(HELPERS:%=$(DESTDIR)$(PREFIX)/bin/%)
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
 
-tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win.h
-	$(CC) -std=c99 -D_XOPEN_SOURCE=600 -Wall -Wextra -o $@ tests/harness/driver.c tests/harness/stubs.c -lutil
+tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win.h paste.c paste.h
+	$(CC) -std=c99 -D_XOPEN_SOURCE=600 -Wall -Wextra -o $@ tests/harness/driver.c tests/harness/stubs.c paste.c -lutil
 
 check: tests/harness/driver
 	@for f in $(HELPERS); do sh -n "$$f" || exit; done

@@ -1,5 +1,6 @@
 /* See LICENSE for license details. */
 #include <errno.h>
+#include <fcntl.h>
 #include <math.h>
 #include <limits.h>
 #include <locale.h>
@@ -18,6 +19,7 @@
 
 char *argv0;
 #include "arg.h"
+#include "paste.h"
 #include "st.h"
 #include "win.h"
 
@@ -363,7 +365,7 @@ zoomreset(const Arg *arg)
 void
 ttysend(const Arg *arg)
 {
-	ttywrite(arg->s, strlen(arg->s), 1);
+	ttyinput(arg->s, strlen(arg->s), 1);
 }
 
 static void
@@ -537,6 +539,13 @@ bpress(XEvent *e)
 	xclosewarninghide();
 	if (1 <= btn && btn <= 11)
 		buttons |= 1 << (btn-1);
+	if (copymodeactive()) {
+		if (btn == Button1)
+			copymodemouse(evcol(e), evrow(e), 0);
+		else if (btn != Button2)
+			mouseaction(e, 0);
+		return;
+	}
 
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
@@ -578,29 +587,6 @@ propnotify(XEvent *e)
 			 xpev->atom == clipboard)) {
 		selnotify(e);
 	}
-}
-
-static size_t
-normalizepaste(const uchar *data, size_t len, char **out)
-{
-	char *buf, *dst;
-	size_t i;
-
-	buf = dst = xmalloc(len + 1);
-	for (i = 0; i < len; i++) {
-		if (data[i] == '\r') {
-			*dst++ = '\r';
-			if (i + 1 < len && data[i + 1] == '\n')
-				i++;
-		} else if (data[i] == '\n') {
-			*dst++ = '\r';
-		} else {
-			*dst++ = data[i];
-		}
-	}
-	*dst = '\0';
-	*out = buf;
-	return dst - buf;
 }
 
 void
@@ -669,13 +655,14 @@ selnotify(XEvent *e)
 		 * Unix LF and DOS CRLF endings to terminal carriage returns.
 		 * FIXME: Fix the computer world.
 		 */
-		pastelen = normalizepaste(data, nitems * format / 8, &paste);
+		pastelen = normalizepaste(data, nitems * format / 8, &paste,
+		    IS_SET(MODE_BRCKTPASTE));
 
 		if (IS_SET(MODE_BRCKTPASTE) && ofs == 0)
-			ttywrite("\033[200~", 6, 0);
-		ttywrite(paste, pastelen, 1);
+			ttyinput("\033[200~", 6, 0);
+		ttyinput(paste, pastelen, 1);
 		if (IS_SET(MODE_BRCKTPASTE) && rem == 0)
-			ttywrite("\033[201~", 6, 0);
+			ttyinput("\033[201~", 6, 0);
 		free(paste);
 		XFree(data);
 		/* number of 32-bit chunks returned */
@@ -796,6 +783,8 @@ brelease(XEvent *e)
 
 	if (1 <= btn && btn <= 11)
 		buttons &= ~(1 << (btn-1));
+	if (copymodeactive())
+		return;
 
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
@@ -811,6 +800,11 @@ brelease(XEvent *e)
 void
 bmotion(XEvent *e)
 {
+	if (copymodeactive()) {
+		if (buttons & (1 << (Button1 - 1)))
+			copymodemouse(evcol(e), evrow(e), 1);
+		return;
+	}
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
 		return;
@@ -1239,6 +1233,12 @@ xicdestroy(XIC xim, XPointer client, XPointer call)
 	return 1;
 }
 
+int
+xconnectionfd(void)
+{
+	return ConnectionNumber(xw.dpy);
+}
+
 void
 xinit(int cols, int rows)
 {
@@ -1252,6 +1252,8 @@ xinit(int cols, int rows)
 
 	if (!(xw.dpy = XOpenDisplay(NULL)))
 		die("can't open display\n");
+	if (fcntl(ConnectionNumber(xw.dpy), F_SETFD, FD_CLOEXEC) < 0)
+		die("fcntl X connection: %s\n", strerror(errno));
 	xw.scr = XDefaultScreen(xw.dpy);
 
 	root = XRootWindow(xw.dpy, xw.scr);
@@ -2210,7 +2212,7 @@ copyunknown:
 
 	/* 2. custom keys from config.h */
 	if ((customkey = kmap(ksym, e->state))) {
-		ttywrite(customkey, strlen(customkey), 1);
+		ttyinput(customkey, strlen(customkey), 1);
 		return;
 	}
 
@@ -2229,7 +2231,7 @@ copyunknown:
 			len = 2;
 		}
 	}
-	ttywrite(buf, len, 1);
+	ttyinput(buf, len, 1);
 }
 
 void

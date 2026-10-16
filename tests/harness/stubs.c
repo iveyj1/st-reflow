@@ -14,6 +14,12 @@ char *lastselection;
 int clipboardcopies;
 void harnessfree(void *);
 
+int
+xconnectionfd(void)
+{
+	return -1;
+}
+
 void
 xbell(void)
 {

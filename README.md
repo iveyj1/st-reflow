@@ -94,6 +94,11 @@ sudo make install
 ## Keyboard copy mode
 
 `Alt+Escape` enters copy mode on either screen and consumes input locally.
+The normal-screen cursor stays on its text while output arrives; the view follows
+it until that line expires from history. Terminal query replies do not move the view.
+Pastes (including middle-click) are ignored in copy mode. Clicking mouse 1 moves
+the cursor and extends an active visual selection; dragging starts characterwise
+visual selection when none is active.
 Relative physical-row numbers overlay the left edge, except on the copy cursor
 row, which is left unobscured. Press `n` in copy mode to toggle numbers; they
 start enabled and the setting persists for the terminal session. Numbers are
