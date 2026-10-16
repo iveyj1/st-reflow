@@ -244,6 +244,49 @@ static MouseShortcut mshortcuts[] = {
 #define MODKEY Mod1Mask
 #define TERMMOD (ControlMask|ShiftMask)
 
+/* Copy-mode input only. Labels are checked against the user documentation. */
+static const CopyKey copykeys[] = {
+	/* keysym, modifiers, character, match, action, documentation label */
+	{ XK_d, CM_CTRL, 0, CK_KEY, COPY_HALFDOWN, "Ctrl+d" },
+	{ XK_u, CM_CTRL, 0, CK_KEY, COPY_HALFUP, "Ctrl+u" },
+	{ XK_v, CM_CTRL|CM_NOSHIFT, 0, CK_KEY, COPY_VISUALRECT, "Ctrl+v" },
+	{ XK_X, CM_CTRL, 0, CK_KEY, COPY_YANK_CLEAN, "Ctrl+Shift+X" },
+	{ XK_c, CM_CTRL, 0, CK_KEY, COPY_EXIT, "Ctrl+c" },
+	{ XK_Left, 0, 0, CK_KEY, COPY_LEFT, "Left" },
+	{ XK_Down, 0, 0, CK_KEY, COPY_DOWN, "Down" },
+	{ XK_Up, 0, 0, CK_KEY, COPY_UP, "Up" },
+	{ XK_Right, 0, 0, CK_KEY, COPY_RIGHT, "Right" },
+	{ 0, 0, 'h', CK_CHAR, COPY_LEFT, "h" },
+	{ 0, 0, 'j', CK_CHAR, COPY_DOWN, "j" },
+	{ 0, 0, 'k', CK_CHAR, COPY_UP, "k" },
+	{ 0, 0, 'l', CK_CHAR, COPY_RIGHT, "l" },
+	{ 0, 0, 'w', CK_CHAR, COPY_WORD_FORWARD, "w" },
+	{ 0, 0, 'W', CK_CHAR, COPY_WORD_FORWARD_BIG, "W" },
+	{ 0, 0, 'e', CK_CHAR, COPY_WORD_END, "e" },
+	{ 0, 0, 'E', CK_CHAR, COPY_WORD_END_BIG, "E" },
+	{ 0, 0, 'b', CK_CHAR, COPY_WORD_BACK, "b" },
+	{ 0, 0, 'B', CK_CHAR, COPY_WORD_BACK_BIG, "B" },
+	{ XK_Home, 0, 0, CK_KEY, COPY_HOME, "Home" },
+	{ 0, 0, '0', CK_CHAR, COPY_HOME, "0" },
+	{ 0, 0, '^', CK_CHAR, COPY_FIRSTPRINT, "^" },
+	{ XK_End, 0, 0, CK_KEY, COPY_END, "End" },
+	{ 0, 0, '$', CK_CHAR, COPY_END, "$" },
+	{ 0, 0, '%', CK_CHAR, COPY_LASTPRINT, "%" },
+	{ XK_Next, 0, 0, CK_KEY, COPY_PAGEDOWN, "PageDown" },
+	{ XK_Prior, 0, 0, CK_KEY, COPY_PAGEUP, "PageUp" },
+	{ 0, 0, 'G', CK_CHAR, COPY_BOTTOM, "G" },
+	{ 0, 0, 'n', CK_CHAR, COPY_NUMBERS, "n" },
+	{ 0, 0, 'v', CK_CHAR, COPY_VISUAL, "v" },
+	{ 0, 0, 'V', CK_CHAR, COPY_VISUALLINE, "V" },
+	{ 0, 0, 'y', CK_CHAR, COPY_YANK, "y" },
+	{ 0, 0, 'Y', CK_CHAR, COPY_YANK_CLEAN, "Y" },
+	{ XK_Escape, 0, 0, CK_KEY, COPY_EXIT, "Escape" },
+	{ 0, 0, 'q', CK_CHAR, COPY_EXIT, "q" },
+	{ 0, 0, 'i', CK_CHAR, COPY_EXIT, "i" },
+	{ 0, 0, '\r', CK_CHAR, COPY_EXIT, "Enter" },
+	{ 0, 0, 'g', CK_PREFIX, COPY_TOP, "gg" },
+};
+
 static char *openurlcmd[] =
 	{ "/bin/sh", "-c", "st-urlhandler -o", "externalpipe", NULL };
 static char *copyurlcmd[] =

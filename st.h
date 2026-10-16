@@ -1,4 +1,6 @@
 /* See LICENSE for license details. */
+#ifndef ST_H
+#define ST_H
 
 #include <stdint.h>
 #include <sys/types.h>
@@ -90,6 +92,7 @@ enum copymode_action {
 	COPY_VISUALRECT, COPY_YANK, COPY_YANK_CLEAN, COPY_EXIT, COPY_NUMBERS
 };
 
+#include "copymode.h"
 void copymode(const Arg *);
 void copymodeaction(enum copymode_action, int);
 int copymodeactive(void);
@@ -158,3 +161,4 @@ extern unsigned int defaultfg;
 extern unsigned int defaultbg;
 extern unsigned int defaultcs;
 extern const int boxdraw, boxdraw_bold, boxdraw_braille;
+#endif

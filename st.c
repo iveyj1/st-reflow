@@ -20,6 +20,7 @@
 
 #include "st.h"
 #include "win.h"
+#include "term.h"
 
 #if   defined(__linux)
  #include <dirent.h>
@@ -265,11 +266,6 @@ static ssize_t xwrite(int, const char *, size_t);
 /* Globals */
 static Term term;
 static Selection sel;
-enum copyvisual_mode { COPY_NONE, COPY_CHAR, COPY_LINE, COPY_RECT };
-static int copyactive, copyx;
-static enum copyvisual_mode copyvisual;
-static long long copyy;
-static int copynumbers = 1;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
@@ -750,346 +746,85 @@ selremove(void)
 	sel.ob.x = -1;
 }
 
-static long long
-copybase(void)
+TView
+termview(void)
 {
-	return IS_SET(MODE_ALTSCREEN) ? 0 : term.histbase;
+	TView v;
+
+	v.alt = IS_SET(MODE_ALTSCREEN);
+	v.base = v.alt ? 0 : term.histbase;
+	v.first = v.base - (v.alt ? 0 : term.histf);
+	v.last = v.base + term.row - 1;
+	v.top = v.base - (v.alt ? 0 : term.scr);
+	v.rows = term.row;
+	v.cols = term.col;
+	v.scrolled = !v.alt && term.scr;
+	v.cursor = (CPos){v.base + term.c.y, term.c.x};
+	return v;
 }
 
-static int
-copyview(void)
+const Glyph *
+termline(long long row)
 {
-	return copyy - copybase() + (IS_SET(MODE_ALTSCREEN) ? 0 : term.scr);
-}
-
-static void
-copyclamp(void)
-{
-	Arg a;
-	int y, len;
-	long long base = copybase();
-
-	copyy = MAX(base - (IS_SET(MODE_ALTSCREEN) ? 0 : term.histf),
-	    MIN(copyy, base + term.row - 1));
-	y = copyview();
-	if (y < 0) {
-		a.i = -y;
-		kscrollup(&a);
-	} else if (y >= term.row) {
-		a.i = y - term.row + 1;
-		kscrolldown(&a);
-	}
-	len = tlinelen(TLINE(copyview()));
-
-	if (copyvisual != COPY_RECT)
-		copyx = MIN(copyx, MAX(len - 1, 0));
-	if (TLINE(copyview())[copyx].mode & ATTR_WDUMMY && copyx > 0)
-		copyx--;
-}
-
-static int
-copyselectiontype(void)
-{
-	return copyvisual == COPY_RECT ? SEL_RECTANGULAR : SEL_REGULAR;
-}
-
-static void
-copyextend(void)
-{
-	if (copyvisual)
-		selextend(copyx, copyview(), copyselectiontype(), 0);
-}
-
-enum copycharclass {
-	COPYCHAR_SPACE, COPYCHAR_WORD, COPYCHAR_PUNCT
-};
-
-static int
-copycharclass(int bigword)
-{
-	Glyph *g = &TLINEABS((int)(copyy - copybase()))[copyx];
-
-	if (!(g->mode & ATTR_SET) || !g->u || iswspace(g->u))
-		return COPYCHAR_SPACE;
-	if (bigword || iswalnum(g->u) || g->u == L'_')
-		return COPYCHAR_WORD;
-	return COPYCHAR_PUNCT;
-}
-
-/* Move by one printable cell. Return 2 when crossing a hard line. */
-static int
-copyadvance(int direction)
-{
-	int crossedhard = 0, len;
-	long long base = copybase();
-	Line line;
-
-	do {
-		line = TLINEABS((int)(copyy - base));
-		len = tlinelen(line);
-		if (direction > 0 && len > 0 && copyx < len - 1) {
-			copyx++;
-		} else if (direction < 0 && copyx > 0) {
-			copyx--;
-		} else {
-			if (direction > 0)
-				crossedhard |= !tiswrapped(line);
-			if ((direction > 0 && copyy >= base + term.row - 1) ||
-			    (direction < 0 && copyy <= base -
-			    (IS_SET(MODE_ALTSCREEN) ? 0 : term.histf)))
-				return 0;
-			copyy += direction;
-			line = TLINEABS((int)(copyy - base));
-			len = tlinelen(line);
-			copyx = direction > 0 ? 0 : MAX(len - 1, 0);
-			if (direction < 0)
-				crossedhard |= !tiswrapped(line);
-		}
-	} while (line[copyx].mode & ATTR_WDUMMY);
-
-	return crossedhard ? 2 : 1;
-}
-
-static void
-copyword(int direction, int bigword, int count)
-{
-	int cls, moved;
-
-	while (count-- > 0) {
-		if (direction > 0) {
-			cls = copycharclass(bigword);
-			do {
-				moved = copyadvance(1);
-				if (!moved)
-					goto done;
-			} while (moved != 2 && cls != COPYCHAR_SPACE &&
-			    copycharclass(bigword) == cls);
-			while (copycharclass(bigword) == COPYCHAR_SPACE) {
-				if (!copyadvance(1))
-					goto done;
-			}
-		} else {
-			if (!copyadvance(-1))
-				goto done;
-			while (copycharclass(bigword) == COPYCHAR_SPACE)
-				if (!copyadvance(-1))
-					goto done;
-			cls = copycharclass(bigword);
-			while ((moved = copyadvance(-1))) {
-				if (moved == 2 || copycharclass(bigword) != cls) {
-					copyadvance(1);
-					break;
-				}
-			}
-		}
-	}
-done:
-	copyclamp();
-	copyextend();
-	tfulldirt();
-}
-
-static void
-copywordend(int bigword, int count)
-{
-	int cls, moved;
-
-	while (count-- > 0) {
-		if (!copyadvance(1))
-			goto done;
-		while (copycharclass(bigword) == COPYCHAR_SPACE)
-			if (!copyadvance(1))
-				goto done;
-		cls = copycharclass(bigword);
-		while ((moved = copyadvance(1))) {
-			if (moved == 2 || copycharclass(bigword) != cls) {
-				copyadvance(-1);
-				break;
-			}
-		}
-	}
-done:
-	copyclamp();
-	copyextend();
-	tfulldirt();
-}
-
-static void
-copyprintable(int last)
-{
-	Line line = TLINEABS((int)(copyy - copybase()));
-	int i, len = tlinelen(line);
-
-	copyx = 0;
-	for (i = last ? len - 1 : 0; BETWEEN(i, 0, len - 1);
-	    i += last ? -1 : 1) {
-		if ((line[i].mode & ATTR_SET) && !(line[i].mode & ATTR_WDUMMY) &&
-		    line[i].u && iswgraph(line[i].u)) {
-			copyx = i;
-			break;
-		}
-	}
-}
-
-static void
-copymove(int dx, int dy)
-{
-	copyx = MAX(0, MIN(term.col - 1, copyx + dx));
-	copyy += dy;
-	copyclamp();
-	copyextend();
-	tfulldirt();
-}
-
-void
-copymodemouse(int x, int y, int drag)
-{
-	if (!copyactive)
-		return;
-	if (drag && !copyvisual) {
-		copyvisual = COPY_CHAR;
-		selstart(copyx, copyview(), 0);
-	}
-	copyx = MAX(0, MIN(x, term.col - 1));
-	copyy = copybase() - (IS_SET(MODE_ALTSCREEN) ? 0 : term.scr)
-	    + MAX(0, MIN(y, term.row - 1));
-	copyclamp();
-	copyextend();
-	tfulldirt();
+	return TLINEABS((int)(row - termview().base));
 }
 
 int
-copymodeactive(void)
+termlinelen(long long row)
 {
-	return copyactive;
+	return tlinelen(TLINEABS((int)(row - termview().base)));
+}
+
+int
+termwrapped(long long row)
+{
+	return tiswrapped(TLINEABS((int)(row - termview().base)));
 }
 
 void
-copymode(const Arg *arg)
+termshow(long long row)
 {
-	(void)arg;
-	/* Alternate-screen navigation stays visible: kscrollup/down are no-ops. */
-	if (copyactive) {
-		copymodeaction(COPY_EXIT, 1);
-		return;
-	}
-
-	copyactive = 1;
-	copyvisual = 0;
-	copyy = copybase() - (IS_SET(MODE_ALTSCREEN) ? 0 : term.scr)
-	    + (term.scr && !IS_SET(MODE_ALTSCREEN) ? term.row - 1 : term.c.y);
-	copyx = term.scr ? 0 : term.c.x;
-	copyclamp();
-	tfulldirt();
-}
-
-void
-copymodeaction(enum copymode_action action, int count)
-{
+	TView v = termview();
 	Arg a;
-	char *s;
-	int i;
 
-	if (!copyactive)
-		return;
-	copyclamp();
-	count = MAX(count, 1);
-
-	switch (action) {
-	case COPY_LEFT:       copymove(-count, 0); return;
-	case COPY_DOWN:       copymove(0, count); return;
-	case COPY_UP:         copymove(0, -count); return;
-	case COPY_RIGHT:      copymove(count, 0); return;
-	case COPY_WORD_FORWARD:     copyword(1, 0, count); return;
-	case COPY_WORD_FORWARD_BIG: copyword(1, 1, count); return;
-	case COPY_WORD_END:         copywordend(0, count); return;
-	case COPY_WORD_END_BIG:     copywordend(1, count); return;
-	case COPY_WORD_BACK:        copyword(-1, 0, count); return;
-	case COPY_WORD_BACK_BIG:    copyword(-1, 1, count); return;
-	case COPY_HOME:       copyx = 0; break;
-	case COPY_FIRSTPRINT: copyprintable(0); break;
-	case COPY_END:
-		if (count > 1)
-			copymove(0, count - 1);
-		copyx = term.col - 1; copyclamp(); break;
-	case COPY_LASTPRINT:
-		if (count > 1)
-			copymove(0, count - 1);
-		copyprintable(1); break;
-	case COPY_HALFDOWN:
-		for (i = 0; i < count; i++) copymove(0, MAX(term.row / 2, 1));
-		return;
-	case COPY_HALFUP:
-		for (i = 0; i < count; i++) copymove(0, -MAX(term.row / 2, 1));
-		return;
-	case COPY_PAGEDOWN:
-		for (i = 0; i < count; i++) copymove(0, MAX(term.row - 1, 1));
-		return;
-	case COPY_PAGEUP:
-		for (i = 0; i < count; i++) copymove(0, -MAX(term.row - 1, 1));
-		return;
-	case COPY_TOP:
-		a.i = HISTSIZE;
+	if (row < v.top) {
+		a.i = v.top - row;
 		kscrollup(&a);
-		copyx = 0;
-		copyy = copybase() - (IS_SET(MODE_ALTSCREEN) ? 0 : term.histf);
-		copyclamp();
-		break;
-	case COPY_BOTTOM:
-		a.i = HISTSIZE;
+	} else if (row >= v.top + v.rows) {
+		a.i = row - v.top - v.rows + 1;
 		kscrolldown(&a);
-		copyx = term.c.x;
-		copyy = copybase() + term.c.y;
-		copyclamp();
-		break;
-	case COPY_GOTO_LINE:
-		a.i = HISTSIZE;
-		kscrollup(&a);
-		copyx = 0;
-		copyy = copybase() - (IS_SET(MODE_ALTSCREEN) ? 0 : term.histf);
-		copyclamp();
-		if (count > 1)
-			copymove(0, count - 1);
-		break;
-	case COPY_NUMBERS:
-		copynumbers = !copynumbers;
-		break;
-	case COPY_VISUAL:
-	case COPY_VISUALLINE:
-	case COPY_VISUALRECT:
-		if (copyvisual) {
-			copyvisual = 0;
-			selclear();
-		} else {
-			copyvisual = action == COPY_VISUALLINE ? COPY_LINE :
-			    action == COPY_VISUALRECT ? COPY_RECT : COPY_CHAR;
-			selstart(copyx, copyview(),
-			    copyvisual == COPY_LINE ? SNAP_LINE : 0);
-		}
-		break;
-	case COPY_YANK:
-	case COPY_YANK_CLEAN:
-		if (!copyvisual) {
-			selstart(copyx, copyview(), SNAP_LINE);
-			selextend(copyx, copyview(), SEL_REGULAR, 1);
-		} else {
-			selextend(copyx, copyview(), copyselectiontype(), 1);
-		}
-		if ((s = getsel())) {
-			if (action == COPY_YANK_CLEAN)
-				seltrimtrailingws(s);
-			xsetsel(s);
-			xclipcopy();
-			copyactive = copyvisual = 0;
-			selclear();
-		}
-		break;
-	case COPY_EXIT:
-		copyactive = copyvisual = 0;
-		selclear();
-		break;
 	}
-	copyextend();
+}
+
+void
+termselstart(CPos p, int snap)
+{
+	selstart(p.x, p.y - termview().top, snap);
+}
+
+void
+termselextend(CPos p, int type, int done)
+{
+	selextend(p.x, p.y - termview().top, type, done);
+}
+
+int
+termrange(CRange *range)
+{
+	long long top = termview().top;
+
+	if (sel.ob.x == -1)
+		return 0;
+	range->start = (CPos){top + sel.ob.y, sel.ob.x};
+	range->end = (CPos){top + sel.oe.y, sel.oe.x};
+	range->kind = sel.type == SEL_RECTANGULAR ? M_RECT :
+	    sel.snap == SNAP_LINE ? M_LINE : M_INCL;
+	return 1;
+}
+
+void
+termdirty(void)
+{
 	tfulldirt();
 }
 
@@ -1297,7 +1032,7 @@ ttyinput(const char *s, size_t n, int may_echo)
 {
 	Arg a = {.i = term.scr};
 
-	if (copyactive)
+	if (copymodeactive())
 		return;
 	kscrolldown(&a);
 	ttywrite(s, n, may_echo);
@@ -1555,7 +1290,7 @@ treset(void)
 	uint i;
     int x, y;
 
-	if (copyactive)
+	if (copymodeactive())
 		copymodeaction(COPY_EXIT, 1);
 	tresetcursor();
 
@@ -1611,7 +1346,7 @@ tswapscreen(void)
 	int tmpcol = term.col, tmprow = term.row;
 
 	/* The copy cursor and selection belong to the screen being left. */
-	if (copyactive)
+	if (copymodeactive())
 		copymodeaction(COPY_EXIT, 1);
 
 	term.line = altline;
@@ -1782,14 +1517,11 @@ tscrollup(int top, int bot, int n, int mode)
             selmove(-s);
             if (-term.scr + sel.nb.y < -term.histf) {
                 selremove();
-                copyvisual = COPY_NONE;
+                copymodelostselection();
             }
         }
     }
-    if (copyactive) {
-        copyclamp();
-        copyextend();
-    }
+    copymodesync();
 }
 
 void
@@ -2435,7 +2167,7 @@ csihandle(void)
 		case 3: /* saved lines (xterm) */
 			term.histf = 0;
 			term.histbase = 0;
-			if (copyactive)
+			if (copymodeactive())
 				copymodeaction(COPY_EXIT, 1);
 			term.scr = 0;
 			if (!sel.alt)
@@ -3417,7 +3149,7 @@ tresize(int col, int row)
 {
 	int *bp;
 
-	if (copyactive && (col != term.col || row != term.row))
+	if (copymodeactive() && (col != term.col || row != term.row))
 		copymodeaction(COPY_EXIT, 1);
 
 	/* col and row are always MAX(_, 1)
@@ -3704,20 +3436,19 @@ drawregion(int x1, int y1, int x2, int y2)
 
 		term.dirty[y] = 0;
 		xdrawline(TLINE(y), x1, y, x2);
-		if (copyactive && copynumbers && y != copyview())
-			xdrawcopynumber(y, abs(y - copyview()), term.row, term.col);
+		if (copymodenumber(y))
+			xdrawcopynumber(y, copymodenumber(y), term.row, term.col);
 	}
 }
 
 void
 draw(void)
 {
-	int cx = term.c.x, ocx = term.ocx, ocy = term.ocy;
+	int cx = term.c.x, ocx = term.ocx, ocy = term.ocy, ncx, ncy;
 
 	if (!xstartdraw())
 		return;
-	if (copyactive)
-		copyclamp();
+	copymodesync();
 
 	/* adjust cursor position */
 	LIMIT(term.ocx, 0, term.col-1);
@@ -3728,13 +3459,8 @@ draw(void)
 		cx--;
 
 	drawregion(0, 0, term.col, term.row);
-	if (copyactive) {
-		int ncx = copyx;
-
-		if (TLINE(copyview())[ncx].mode & ATTR_WDUMMY && ncx > 0)
-			ncx--;
-		xdrawcopycursor(ncx, copyview(),
-		                TLINE(copyview())[ncx].mode & ATTR_WIDE);
+	if (copymodecursor(&ncx, &ncy)) {
+		xdrawcopycursor(ncx, ncy, TLINE(ncy)[ncx].mode & ATTR_WIDE);
 	} else {
 		xdrawcursor(cx, term.c.y, term.line[term.c.y][cx],
 		            term.ocx, term.ocy, term.line[term.ocy][term.ocx]);

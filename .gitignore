@@ -4,5 +4,6 @@
 /buildinfo.h
 /buildinfo.h.tmp
 /scripts/cloc_by_commit.md
+/tests/harness/copykeys.h
 /tests/harness/driver
 /tests/harness/*.o

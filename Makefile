@@ -4,7 +4,7 @@
 
 include config.mk
 
-SRC = st.c x.c boxdraw.c paste.c
+SRC = st.c x.c boxdraw.c paste.c copymode.c
 OBJ = $(SRC:.c=.o)
 HELPERS = st-urlhandler st-copyout
 TERMINFO_DIR = $(PREFIX)/share/terminfo
@@ -35,7 +35,8 @@ config.h:
 .c.o:
 	$(CC) $(STCFLAGS) -c $<
 
-st.o: config.h st.h win.h
+st.o: config.h st.h win.h term.h copymode.h
+copymode.o: st.h term.h copymode.h win.h
 x.o: arg.h buildinfo.h config.h st.h win.h paste.h
 paste.o: paste.h
 boxdraw.o: config.h st.h boxdraw_data.h
@@ -46,13 +47,13 @@ st: $(OBJ)
 	$(CC) -o $@ $(OBJ) $(STLDFLAGS)
 
 clean:
-	rm -f st $(OBJ) buildinfo.h buildinfo.h.tmp st-$(VERSION).tar.gz tests/harness/driver
+	rm -f st $(OBJ) buildinfo.h buildinfo.h.tmp st-$(VERSION).tar.gz tests/harness/driver tests/harness/copykeys.h
 
 dist: clean
 	$(MAKE) buildinfo.h
 	mkdir -p st-$(VERSION)
 	cp -R FAQ LEGACY LICENSE Makefile README.md PATCHES.md config.mk\
-		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h paste.h boxdraw_data.h $(SRC) $(HELPERS) tests\
+		buildinfo.h config.def.h st.info st.1 arg.h st.h win.h paste.h term.h copymode.h boxdraw_data.h $(SRC) $(HELPERS) tests\
 		st-$(VERSION)
 	tar -cf - st-$(VERSION) | gzip > st-$(VERSION).tar.gz
 	rm -rf st-$(VERSION)
@@ -72,7 +73,10 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/st $(HELPERS:%=$(DESTDIR)$(PREFIX)/bin/%)
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
 
-tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win.h paste.c paste.h
+tests/harness/copykeys.h: config.def.h tests/copykeys.py
+	python3 tests/copykeys.py --emit > $@
+
+tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win.h paste.c paste.h copymode.c copymode.h term.h tests/harness/copykeys.h
 	$(CC) -std=c99 -D_XOPEN_SOURCE=600 -Wall -Wextra -o $@ tests/harness/driver.c tests/harness/stubs.c paste.c -lutil
 
 check: tests/harness/driver
