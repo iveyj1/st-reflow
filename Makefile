@@ -45,7 +45,7 @@ st: $(OBJ)
 	$(CC) -o $@ $(OBJ) $(STLDFLAGS)
 
 clean:
-	rm -f st $(OBJ) buildinfo.h buildinfo.h.tmp st-$(VERSION).tar.gz
+	rm -f st $(OBJ) buildinfo.h buildinfo.h.tmp st-$(VERSION).tar.gz tests/harness/driver
 
 dist: clean
 	$(MAKE) buildinfo.h
@@ -71,9 +71,12 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/st $(HELPERS:%=$(DESTDIR)$(PREFIX)/bin/%)
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
 
-check:
+tests/harness/driver: tests/harness/driver.c tests/harness/stubs.c st.c st.h win.h
+	$(CC) -std=c99 -D_XOPEN_SOURCE=600 -Wall -Wextra -o $@ tests/harness/driver.c tests/harness/stubs.c -lutil
+
+check: tests/harness/driver
 	@for f in $(HELPERS); do sh -n "$$f" || exit; done
 	python3 tests/helpers.py
-	python3 tests/copy_exit.py
+	./tests/harness/driver
 
 .PHONY: all clean dist install uninstall check

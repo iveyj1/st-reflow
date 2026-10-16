@@ -3572,6 +3572,8 @@ treflow(int col, int row)
     }
     /* allocate new rows */
     for (i = row - 1; i > nce; i--) {
+        if (i < term.row)
+            free(term.line[i]);
         term.line[i] = xmalloc(col * sizeof(Glyph));
         for (j = 0; j < col; j++)
             tclearglyph(&term.line[i][j], 0);
@@ -3589,6 +3591,9 @@ treflow(int col, int row)
         free(term.hist[j]);
         term.hist[j] = buf[ny];
     }
+    /* Reflow can produce more rows than the history ring can retain. */
+    while (ny >= 0)
+        free(buf[ny--]);
     term.histf = -i - 1;
     term.scr = MIN(term.scr, term.histf);
 
