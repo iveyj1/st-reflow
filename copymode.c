@@ -1,8 +1,10 @@
 /* Copy mode reads terminal rows through term.h; motions never mutate the view.
  * Deliberate Vim deviations: j/k use physical rows, % means last printable,
- * V selects logical/wrapped lines, G goes to the live cursor, y/Y immediately
- * copy the visual range or current logical line. No operator-pending bindings. */
+ * V selects logical/wrapped lines, G goes to the live cursor. Search is literal
+ * and global; character-find is logical-line-local. Copies leave copy mode. */
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <wchar.h>
 #include <wctype.h>
 #include "st.h"
@@ -14,7 +16,13 @@ static int copyactive, copyx, copynumbers = 1;
 static long long copyy;
 static enum copyvisual_mode copyvisual;
 static enum copyparserstate parserstate;
-static int pendingcount;
+static int pendingcount, pendingyank, operatorcount, commandcount;
+static int finddirection, findtill, inputdirection, inputtill;
+static Rune findchar;
+#define SEARCHLENGTH 256
+static Rune searchtext[SEARCHLENGTH], searchinput[SEARCHLENGTH];
+static int searchlen, inputlen, searchdirection = 1;
+static const char *copymessage = "";
 
 static CPos
 clamp(CPos p, int rectangle)
@@ -118,7 +126,7 @@ advance(CPos *p, int direction)
 }
 
 static CPos
-wordmotion(CPos p, int count, int direction, int big, int end)
+wordmotion(CPos p, int count, int direction, int big, int end, int *exhausted)
 {
 	int cls, moved;
 
@@ -140,12 +148,18 @@ wordmotion(CPos p, int count, int direction, int big, int end)
 			cls = charclass(p, big);
 			do {
 				moved = advance(&p, 1);
-				if (!moved)
+				if (!moved) {
+					if (exhausted)
+						*exhausted = 1;
 					return p;
+				}
 			} while (moved != 2 && cls && charclass(p, big) == cls);
 			while (!charclass(p, big))
-				if (!advance(&p, 1))
+				if (!advance(&p, 1)) {
+					if (exhausted)
+						*exhausted = 1;
 					return p;
+				}
 		} else {
 			if (!advance(&p, -1))
 				break;
@@ -170,7 +184,7 @@ copymotion(CPos from, enum copymode_action action, int count, int rectangle)
 	TView v = termview();
 	CPos p = clamp(from, rectangle);
 	CMotion m = {p, M_EXCL, 1};
-	int i, len, step = 0;
+	int i, len, step = 0, exhausted = 0;
 	const Glyph *line;
 
 	count = MAX(1, MIN(count, 1000000));
@@ -179,12 +193,12 @@ copymotion(CPos from, enum copymode_action action, int count, int rectangle)
 	case COPY_RIGHT: p.x += count; break;
 	case COPY_UP: p.y -= count; break;
 	case COPY_DOWN: p.y += count; break;
-	case COPY_WORD_FORWARD: p = wordmotion(p, count, 1, 0, 0); break;
-	case COPY_WORD_FORWARD_BIG: p = wordmotion(p, count, 1, 1, 0); break;
-	case COPY_WORD_BACK: p = wordmotion(p, count, -1, 0, 0); break;
-	case COPY_WORD_BACK_BIG: p = wordmotion(p, count, -1, 1, 0); break;
-	case COPY_WORD_END: p = wordmotion(p, count, 1, 0, 1); m.kind = M_INCL; break;
-	case COPY_WORD_END_BIG: p = wordmotion(p, count, 1, 1, 1); m.kind = M_INCL; break;
+	case COPY_WORD_FORWARD: p = wordmotion(p, count, 1, 0, 0, &exhausted); break;
+	case COPY_WORD_FORWARD_BIG: p = wordmotion(p, count, 1, 1, 0, &exhausted); break;
+	case COPY_WORD_BACK: p = wordmotion(p, count, -1, 0, 0, NULL); break;
+	case COPY_WORD_BACK_BIG: p = wordmotion(p, count, -1, 1, 0, NULL); break;
+	case COPY_WORD_END: p = wordmotion(p, count, 1, 0, 1, NULL); m.kind = M_INCL; break;
+	case COPY_WORD_END_BIG: p = wordmotion(p, count, 1, 1, 1, NULL); m.kind = M_INCL; break;
 	case COPY_HOME: p.x = 0; break;
 	case COPY_END:
 		p.y += count - 1;
@@ -226,6 +240,8 @@ copymotion(CPos from, enum copymode_action action, int count, int rectangle)
 		if (p.y == old.y && p.x == old.x)
 			break;
 	}
+	if (exhausted)
+		m.kind = M_INCL;
 	m.to = clamp(p, rectangle);
 	return m;
 }
@@ -253,12 +269,37 @@ copyoperator(enum copymode_action op, CRange range)
 	termselextend(range.end, type, 1);
 	if (!(s = getsel()))
 		return 0;
+	if (range.kind == M_LINE && (!s[0] || s[strlen(s) - 1] != '\n')) {
+		size_t len = strlen(s);
+		s = xrealloc(s, len + 2);
+		s[len] = '\n';
+		s[len + 1] = '\0';
+	}
+	if (range.kind == M_EOL && s[0] && s[strlen(s) - 1] == '\n')
+		s[strlen(s) - 1] = '\0';
 	if (op == COPY_YANK_CLEAN)
 		seltrimtrailingws(s);
 	xsetsel(s);
 	xclipcopy();
 	selclear();
 	return 1;
+}
+
+/* End of the counted logical line, not the counted display row. */
+static CPos
+logicalend(CPos p, int count)
+{
+	TView v = termview();
+
+	do {
+		while (p.y < v.last && termwrapped(p.y))
+			p.y++;
+		if (--count <= 0 || p.y == v.last)
+			break;
+		p.y++;
+	} while (1);
+	p.x = MAX(termlinelen(p.y) - 1, 0);
+	return clamp(p, 0);
 }
 
 void
@@ -296,15 +337,21 @@ copymodeaction(enum copymode_action action, int count)
 		break;
 	case COPY_YANK:
 	case COPY_YANK_CLEAN:
+	case COPY_YANK_END:
+	case COPY_YANK_ALIAS:
+	case COPY_YANK_LINE:
 		if (copyvisual) {
 			if (!termrange(&range))
 				break;
 			range.kind = copyvisual == COPY_LINE ? M_LINE :
 			    copyvisual == COPY_RECT ? M_RECT : M_INCL;
+			if (action == COPY_YANK_END)
+				action = COPY_YANK_CLEAN;
 		} else {
-			range = (CRange){{copyy, copyx}, {copyy, copyx}, M_LINE};
+			range = (CRange){{copyy, copyx}, logicalend((CPos){copyy, copyx}, MAX(1, count)),
+			    action == COPY_YANK || action == COPY_YANK_LINE ? M_LINE : M_EOL};
 		}
-		if (!copyoperator(action, range))
+		if (!copyoperator(action == COPY_YANK_CLEAN ? COPY_YANK_CLEAN : COPY_YANK, range))
 			break;
 		/* FALLTHROUGH */
 	case COPY_EXIT:
@@ -376,7 +423,123 @@ void
 copyparserreset(void)
 {
 	parserstate = CP_IDLE;
-	pendingcount = 0;
+	pendingcount = pendingyank = operatorcount = commandcount = inputlen = 0;
+	copymessage = "";
+}
+
+static int
+samepos(CPos a, CPos b)
+{
+	return a.y == b.y && a.x == b.x;
+}
+
+static CMotion
+findmotion(int direction, int till, Rune target, int count, int repeat)
+{
+	CPos from = {copyy, copyx}, p = from, end;
+	CMotion m = {from, M_INCL, 0};
+
+	while (advance(&p, direction) == 1) {
+		if (termline(p.y)[p.x].u != target)
+			continue;
+		end = p;
+		if (till)
+			advance(&end, -direction);
+		/* Repeating t/T must not get stuck beside the previous target. */
+		if (repeat && till && samepos(end, from))
+			continue;
+		if (--count == 0) {
+			m.to = end;
+			m.ok = 1;
+			return m;
+		}
+	}
+	copymessage = "Character not found";
+	return m;
+}
+
+static int
+searchmatch(CPos p)
+{
+	int i;
+
+	for (i = 0; i < searchlen; i++) {
+		if (p.x >= termlinelen(p.y) || termline(p.y)[p.x].u != searchtext[i])
+			return 0;
+		if (i + 1 < searchlen && advance(&p, 1) != 1)
+			return 0;
+	}
+	return 1;
+}
+
+static CMotion
+searchmotion(int direction, int count)
+{
+	TView v = termview();
+	CPos from = clamp((CPos){copyy, copyx}, 0), p = from;
+	CMotion m = {from, M_EXCL, 0};
+	int wrapped = 0;
+
+	if (!searchlen) {
+		copymessage = "No previous search";
+		return m;
+	}
+	do {
+		if (!advance(&p, direction)) {
+			p = direction > 0 ? (CPos){v.first, 0} :
+			    clamp((CPos){v.last, v.cols - 1}, 0);
+			wrapped = 1;
+		}
+		if (searchmatch(p) && --count == 0) {
+			m.to = p;
+			m.ok = 1;
+			copymessage = wrapped ? "Search wrapped" : "";
+			return m;
+		}
+	} while (!samepos(p, from));
+	copymessage = "Pattern not found";
+	return m;
+}
+
+static void
+finishmotion(CMotion m)
+{
+	int yank = pendingyank;
+	const char *message = copymessage;
+	CPos from = {copyy, copyx};
+
+	copyparserreset();
+	copymessage = message;
+	if (m.ok) {
+		if (!yank)
+			applymotion(m);
+		else if (copyoperator(COPY_YANK, (CRange){from, m.to, m.kind}))
+			copymodeaction(COPY_EXIT, 1);
+	}
+	termdirty();
+}
+
+const char *
+copymodestatus(void)
+{
+	static char text[SEARCHLENGTH * 4 + 96];
+	char *p = text;
+	int i;
+
+	if (!copyactive)
+		return "";
+	if (parserstate == CP_SEARCH) {
+		*p++ = inputdirection > 0 ? '/' : '?';
+		for (i = 0; i < inputlen; i++)
+			p += utf8encode(searchinput[i], p);
+		snprintf(p, sizeof(text) - (p - text), "_ %s", copymessage);
+		return text;
+	}
+	if (copymessage[0])
+		return copymessage;
+	if (parserstate == CP_FIND)
+		return "Find character: _";
+	return pendingyank ? "y: motion or y" : "";
 }
 
 void
@@ -384,20 +547,67 @@ copymodekey(unsigned long key, int ch, unsigned int mods, int modifier,
     const CopyKey *keys, size_t nkeys)
 {
 	size_t i;
-	int count;
+	int count, escape = key == 0xff1b || ch == 27;
 	enum copymode_action action;
+	CMotion motion;
 
-	if (modifier)
+	if (modifier || !copyactive)
 		return;
-	if (!(mods & (CM_CTRL | CM_ALT)) && ch >= '0' && ch <= '9' &&
+	copymodesync();
+	if (escape && (parserstate != CP_IDLE || pendingyank)) {
+		copyparserreset();
+		termdirty();
+		return;
+	}
+	if (mods & CM_ALT)
+		return;
+	if (parserstate == CP_SEARCH) {
+		copymessage = "";
+		if (key == 0xff0d || ch == '\r') {
+			if (inputlen) {
+				memcpy(searchtext, searchinput, inputlen * sizeof(Rune));
+				searchlen = inputlen;
+			}
+			searchdirection = inputdirection;
+			finishmotion(searchmotion(searchdirection, commandcount));
+		} else if ((mods & CM_CTRL) && (key == 'c' || ch == 3)) {
+			copyparserreset();
+		} else if ((mods & CM_CTRL) && (key == 'u' || ch == 21)) {
+			inputlen = 0;
+		} else if (key == 0xff08 || ch == 8 || ch == 127) {
+			inputlen = MAX(0, inputlen - 1);
+		} else if (!(mods & CM_CTRL) && ch >= 32 && iswprint(ch)) {
+			if (inputlen < SEARCHLENGTH)
+				searchinput[inputlen++] = ch;
+			else
+				copymessage = "Pattern too long";
+		}
+		termdirty();
+		return;
+	}
+	copymessage = "";
+	if (parserstate == CP_FIND) {
+		if (!(mods & CM_CTRL) && ch >= 32 && iswprint(ch)) {
+			findchar = ch;
+			finddirection = inputdirection;
+			findtill = inputtill;
+			finishmotion(findmotion(finddirection, findtill, findchar, commandcount, 0));
+		} else {
+			copyparserreset();
+			termdirty();
+		}
+		return;
+	}
+	if (!(mods & CM_CTRL) && ch >= '0' && ch <= '9' &&
 	    (ch != '0' || pendingcount)) {
 		pendingcount = MIN(1000000, pendingcount * 10 + ch - '0');
 		parserstate = CP_COUNT;
 		return;
 	}
 	count = pendingcount ? pendingcount : 1;
+	if (pendingyank)
+		count = MIN(1000000LL, (long long)count * operatorcount);
 	for (i = 0; i < nkeys; i++) {
-		/* Character entries already encode Shift in their ASCII value. */
 		if ((mods & CM_CTRL) != (keys[i].mods & CM_CTRL))
 			continue;
 		if ((keys[i].mods & CM_NOSHIFT) && (mods & CM_SHIFT))
@@ -409,11 +619,69 @@ copymodekey(unsigned long key, int ch, unsigned int mods, int modifier,
 			parserstate = CP_PREFIX;
 			return;
 		}
+		if (action == COPY_YANK && !copyvisual) {
+			if (!pendingyank) {
+				pendingyank = 1;
+				operatorcount = count;
+				pendingcount = 0;
+				parserstate = CP_OPERATOR;
+				termdirty();
+				return;
+			}
+			action = COPY_YANK_LINE;
+		}
+		if (action >= COPY_FIND && action <= COPY_TILL_BACK) {
+			inputdirection = action >= COPY_FIND_BACK ? -1 : 1;
+			inputtill = action == COPY_TILL || action == COPY_TILL_BACK;
+			commandcount = count;
+			parserstate = CP_FIND;
+			termdirty();
+			return;
+		}
+		if (action == COPY_FIND_REPEAT || action == COPY_FIND_REVERSE) {
+			if (findchar)
+				finishmotion(findmotion(finddirection * (action == COPY_FIND_REPEAT ? 1 : -1),
+				    findtill, findchar, count, 1));
+			else {
+				copyparserreset();
+				copymessage = "No previous character find";
+				termdirty();
+			}
+			return;
+		}
+		if (action == COPY_SEARCH || action == COPY_SEARCH_BACK) {
+			inputdirection = action == COPY_SEARCH ? 1 : -1;
+			inputlen = 0;
+			commandcount = count;
+			parserstate = CP_SEARCH;
+			termdirty();
+			return;
+		}
+		if (action == COPY_SEARCH_REPEAT || action == COPY_SEARCH_REVERSE) {
+			finishmotion(searchmotion(searchdirection * (action == COPY_SEARCH_REPEAT ? 1 : -1), count));
+			return;
+		}
 		if (pendingcount && (action == COPY_TOP || action == COPY_BOTTOM))
 			action = COPY_GOTO_LINE;
+		if (pendingyank && action != COPY_YANK_LINE) {
+			motion = copymotion((CPos){copyy, copyx}, action, count, 0);
+			/* Vim's yw/yW do not consume the next line's indentation. */
+			if (action == COPY_WORD_FORWARD || action == COPY_WORD_FORWARD_BIG) {
+				CPos before = count == 1 ? (CPos){copyy, copyx} :
+				    copymotion((CPos){copyy, copyx}, action, count - 1, 0).to;
+				CPos end = logicalend(before, 1);
+				if (motion.to.y > end.y) {
+					motion.to = end;
+					motion.kind = M_EOL;
+				}
+			}
+			finishmotion(motion);
+			return;
+		}
 		copyparserreset();
 		copymodeaction(action, count);
 		return;
 	}
 	copyparserreset();
+	termdirty();
 }

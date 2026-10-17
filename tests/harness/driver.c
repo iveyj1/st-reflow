@@ -267,9 +267,13 @@ testreflow(void)
 static void
 keysequence(const char *s)
 {
-	for (; *s; s++)
-		copymodekey((unsigned char)*s, *s, 0, 0, copykeys,
-		    sizeof copykeys / sizeof *copykeys);
+	Rune rune;
+	size_t n;
+
+	while (*s && (n = utf8decode(s, &rune, strlen(s)))) {
+		copymodekey(rune, rune, 0, 0, copykeys, sizeof copykeys / sizeof *copykeys);
+		s += n;
+	}
 }
 
 static void
@@ -325,7 +329,7 @@ testparser(void)
 	keysequence("G"); assert(copyy == termview().cursor.y && term.scr == 0);
 	keysequence("5G"); assert(copyy == first + 4);
 	keysequence("2$"); assert(copyy == first + 5 && copyx == 22);
-	keysequence("3?j"); assert(copyy == first + 6);
+	keysequence("3@j"); assert(copyy == first + 6);
 	keysequence("5");
 	copymodekey(XK_Shift_L, 0, 0, 1, copykeys, sizeof copykeys / sizeof *copykeys);
 	keysequence("G"); assert(copyy == first + 4);
@@ -333,8 +337,178 @@ testparser(void)
 	copymodekey(XK_Shift_L, 0, 0, 1, copykeys, sizeof copykeys / sizeof *copykeys);
 	keysequence("W"); assert(copyx == 14);
 	keysequence("9999999999"); assert(pendingcount == 1000000);
-	keysequence("?"); assert(parserstate == CP_IDLE && pendingcount == 0);
+	keysequence("@"); assert(parserstate == CP_IDLE && pendingcount == 0);
 	copymodeaction(COPY_EXIT, 1);
+}
+
+static void
+copyfixture(const char *text, int width)
+{
+	if (copyactive)
+		copymodeaction(COPY_EXIT, 1);
+	resize(width, 6);
+	feed("\033[2J\033[3J\033[H");
+	feed(text);
+	copymode(NULL);
+	keysequence("gg");
+}
+
+static void
+expectcopy(const char *text, int width, const char *keys, const char *expected)
+{
+	int copies = clipboardcopies;
+
+	copyfixture(text, width);
+	keysequence(keys);
+	if (copyactive || strcmp(lastselection, expected))
+		fprintf(stderr, "keys %s: expected <%s>, got <%s>, active %d\n",
+		    keys, expected, lastselection, copyactive);
+	assert(!copyactive && clipboardcopies == copies + 1);
+	assert(!strcmp(lastselection, expected));
+}
+
+static void
+controlkey(unsigned long key)
+{
+	copymodekey(key, 0, CM_CTRL, 0, copykeys, sizeof copykeys / sizeof *copykeys);
+}
+
+static void
+testcommands(void)
+{
+	const char *words = "one two three four five six seven";
+	int copies, numbers, i;
+	long long first;
+
+	expectcopy(words, 40, "3yw", "one two three ");
+	expectcopy(words, 40, "y3w", "one two three ");
+	expectcopy(words, 40, "2y3w", "one two three four five six ");
+	expectcopy("one,two three", 40, "yw", "one");
+	expectcopy("one,two three", 40, "yW", "one,two ");
+	expectcopy("one\r\n  two", 40, "yw", "one");
+	expectcopy("one", 40, "yw", "one");
+	expectcopy("\r\n\r\n\r\n\r\n\r\none", 40, "5jyw", "one");
+	expectcopy("\r\n\r\n\r\n\r\n\r\na b", 40, "5jyw", "a ");
+	expectcopy("abc,def,ghi", 40, "yf,", "abc,");
+	expectcopy("abc,def,ghi", 40, "yt,", "abc");
+	expectcopy("abc,def,ghi", 40, "y2f,", "abc,def,");
+	expectcopy("abc,def,ghi", 40, "$yF,", ",ghi");
+	expectcopy("abc,def,ghi", 40, "$yT,", "ghi");
+	expectcopy("abc,def,ghi", 40, "vt,;y", "abc,def");
+	expectcopy("abc,def,ghi", 40, "vf,;y", "abc,def,");
+	expectcopy("abc,def,ghi", 40, "$vF,y", ",ghi");
+	expectcopy("abc,def,ghi", 40, "$vT,y", "ghi");
+	expectcopy("ab界cd界ef", 40, "y2f界", "ab界cd界");
+	expectcopy("abcdefghijklmnop\r\nnext", 8, "2lY", "cdefghijklmnop");
+	expectcopy("abcdefghijklmnop\r\nnext", 8, "yy", "abcdefghijklmnop\n");
+	expectcopy("abcdefghijklmnop\r\nnext", 8, "2Y", "abcdefghijklmnop\nnext");
+	expectcopy("first\r\nsecond\r\nthird", 40, "2yy", "first\nsecond\n");
+	expectcopy("first\r\nsecond\r\nthird", 40, "y2y", "first\nsecond\n");
+	expectcopy("abc\r\n\r\nnext", 40, "2Y", "abc\n");
+	expectcopy("abc  \r\n  def  ", 40, "v2$Y", "abc\n  def");
+	expectcopy("abc  ", 40, "v$y", "abc  ");
+	expectcopy("abc  ", 40, "v$999y", "abc  ");
+	copyfixture("abc   def", 6);
+	controlkey(XK_y);
+	assert(!copyactive && !strcmp(lastselection, "abc   def"));
+	copyfixture("abc  \r\n  def  ", 40);
+	keysequence("2"); controlkey(XK_y);
+	assert(!copyactive && !strcmp(lastselection, "abc\n  def"));
+	copyfixture("abc  \r\n  def  ", 40);
+	keysequence("2"); controlkey(XK_X);
+	assert(!copyactive && !strcmp(lastselection, "abc\n  def"));
+	copyfixture("abc  ", 40);
+	keysequence("l"); controlkey(XK_C);
+	assert(!copyactive && !strcmp(lastselection, "bc  "));
+	copyfixture("abc  ", 40);
+	keysequence("v$"); controlkey(XK_C);
+	assert(!copyactive && !strcmp(lastselection, "abc  "));
+	copyfixture("abc  ", 40);
+	keysequence("v$"); controlkey(XK_y);
+	assert(!copyactive && !strcmp(lastselection, "abc"));
+
+	copyfixture("a,b,c,d", 40);
+	keysequence("f,;"); assert(copyx == 3);
+	keysequence(","); assert(copyx == 1);
+	keysequence(";"); assert(copyx == 3); /* Reverse does not redefine find. */
+	keysequence("2;"); assert(copyx == 3); /* Insufficient matches: no movement. */
+	keysequence("0t,;"); assert(copyx == 2);
+	keysequence(";"); assert(copyx == 4);
+	keysequence(","); assert(copyx == 2);
+	keysequence(";"); assert(copyx == 4);
+	keysequence("$T,;"); assert(copyx == 4);
+	keysequence(";"); assert(copyx == 2);
+	keysequence(","); assert(copyx == 4);
+	keysequence(";"); assert(copyx == 2);
+
+	copyfixture("abc\r\nz", 40);
+	copies = clipboardcopies;
+	keysequence("yfz");
+	assert(copyactive && copyx == 0 && clipboardcopies == copies);
+	assert(strstr(copymodestatus(), "not found"));
+	keysequence("y\033"); assert(copyactive && !pendingyank);
+	keysequence("f\033"); assert(copyactive && parserstate == CP_IDLE);
+	keysequence("y@"); assert(copyactive && !pendingyank);
+	keysequence("999999y999999w"); assert(!copyactive); /* Saturated multiplication. */
+	copyfixture("abcdefghijZ", 8);
+	keysequence("fZ"); assert(copyx == 2 && copyy == termview().first + 1);
+
+	copyfixture("one cat\r\ntwo cat\r\nthree cat", 40);
+	first = termview().first;
+	keysequence("/cat\r"); assert(copyy == first && copyx == 4);
+	keysequence("2n"); assert(copyy == first + 2 && copyx == 6);
+	keysequence("N"); assert(copyy == first + 1);
+	keysequence("n"); assert(copyy == first + 2);
+	keysequence("n"); assert(copyy == first && strstr(copymodestatus(), "wrapped"));
+	keysequence("?cat\r"); assert(copyy == first + 2);
+	keysequence("n"); assert(copyy == first + 1);
+	keysequence("N"); assert(copyy == first + 2);
+	keysequence("n"); assert(copyy == first + 1);
+	keysequence("4n"); assert(copyy == first + 1 && strstr(copymodestatus(), "not found"));
+	keysequence("/absent\033n"); assert(copyy == first); /* Cancel keeps previous search. */
+	keysequence("/\r"); assert(copyy == first + 1); /* Empty Enter reuses pattern. */
+	keysequence("/CAT\r"); assert(copyy == first + 1 && strstr(copymodestatus(), "not found"));
+	keysequence("/junk"); controlkey(XK_u);
+	keysequence("catx\b\r"); assert(copyy == first + 2);
+	numbers = copynumbers; controlkey(XK_n); assert(copynumbers != numbers);
+	controlkey(XK_n); assert(copynumbers == numbers);
+	expectcopy("one cat\r\ntwo cat", 40, "v/cat\ry", "one c");
+	expectcopy("ab界cd界ef", 40, "v/界\rny", "ab界cd界");
+	copyfixture("012345abcdef\r\nghij", 8);
+	first = termview().first;
+	keysequence("/5abc\r"); assert(copyy == first && copyx == 5);
+	keysequence("/fghi\r"); assert(copyy == first && copyx == 5);
+	assert(strstr(copymodestatus(), "not found")); /* Cannot cross hard newline. */
+	copymodeaction(COPY_VISUALRECT, 1);
+	copymodeaction(COPY_RIGHT, 100);
+	keysequence("/missing\r"); /* Rectangle padding must not make search loop forever. */
+	assert(copyactive && strstr(copymodestatus(), "not found"));
+	copyfixture("number 123 and a.b\r\nnumber 123", 40);
+	keysequence("/123\r"); assert(copyx == 7);
+	keysequence("/a.b\r"); assert(copyx == 15); /* Literal punctuation. */
+	keysequence("/界x\b\b"); assert(inputlen == 0);
+	for (i = 0; i < SEARCHLENGTH + 1; i++)
+		keysequence("x");
+	assert(inputlen == SEARCHLENGTH && strstr(copymodestatus(), "too long"));
+	controlkey(XK_c); assert(copyactive && parserstate == CP_IDLE);
+	copyfixture("retained marker\r\n", 40);
+	for (i = 0; i < 12; i++)
+		feed("live output\r\n");
+	keysequence("G?retained\r");
+	assert(copyy == termview().first && term.scr > 0);
+	keysequence("/retained");
+	for (i = 0; i < HISTSIZE + 10; i++)
+		feed("replacement\r\n");
+	keysequence("\r");
+	assert(copyactive && strstr(copymodestatus(), "not found"));
+	resize(8, 6);
+	feed("\033[?1049h\033[2J\033[Halternate cat");
+	copymode(NULL); keysequence("gg/5abc\r");
+	assert(strstr(copymodestatus(), "not found"));
+	keysequence("/cat\r"); assert(copyx == 2 && copyy == termview().first + 1);
+	copymodeaction(COPY_EXIT, 1);
+	feed("\033[?1049l");
+	resize(40, 6);
 }
 
 static void
@@ -378,6 +552,7 @@ main(void)
 	testmouse();
 	testmotions();
 	testparser();
+	testcommands();
 	testreflow();
 	testexternalpipe();
 	puts("headless terminal tests passed");

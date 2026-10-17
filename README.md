@@ -99,13 +99,13 @@ Pastes (including middle-click) are ignored in copy mode. Clicking mouse 1 moves
 the cursor and extends an active visual selection; dragging starts characterwise
 visual selection when none is active.
 Relative physical-row numbers overlay the left edge, except on the copy cursor
-row, which is left unobscured. Press `n` in copy mode to toggle numbers; they
+row, which is left unobscured. Press `Ctrl+n` in copy mode to toggle numbers; they
 start enabled and the setting persists for the terminal session. Numbers are
 rendering only: they do not affect copied text, history, or terminal geometry.
 On the alternate screen, navigation is limited to visible rows (no scrollback);
 `gg` goes to the top visible row and counted `gg/G` addresses visible rows.
 The application continues updating the display; copy mode does not freeze it.
-Resize or switching screens exits copy mode. Successful `y`, `Y`, or `Ctrl+Shift+X` copies also exit
+Resize or switching screens exits copy mode. Every successful yank also exits
 copy mode and clear the selection highlight, without changing scrollback position.
 Outside copy mode, `Ctrl+Shift+C/X` clears the highlight after copying. PRIMARY
 and CLIPBOARD remain available for pasting. Mouse selection alone is unchanged;
@@ -125,10 +125,43 @@ an unsuccessful copy does not exit selection mode.
 | Numeric prefix | Repeat movement commands, for example `5j`, `3w`, or `2$` |
 | `v` / `V` | Characterwise / logical-line selection |
 | `Ctrl+v` | Rectangular selection |
-| `n` | Toggle relative row numbers |
-| `y` | Yank selection or current logical line to PRIMARY and CLIPBOARD |
-| `Y` / `Ctrl+Shift+X` | Clean yank and exit; trim trailing spaces/tabs |
-| Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode |
+| `f` / `t` / `F` / `T` + character | Find forward / till forward / find backward / till backward in this logical line; counts supported |
+| `;` / `,` | Repeat character-find in original / reversed direction; counts supported |
+| `/` / `?` + text + Enter | Literal, case-sensitive forward / backward search over available history |
+| `n` / `N` | Repeat search in original / reversed direction; counts supported |
+| `Ctrl+n` | Toggle relative row numbers |
+| `y` | Copy existing selection; otherwise await a motion (e.g. `3yw`, `y3W`, `yt,`, `yf:`, `yT,`, `yF:`) |
+| `yy` | Copy counted whole logical lines, including the final newline; `3yy` and `y3y` are equivalent |
+| `Y` | Without selection, copy through counted logical-line end; with selection, trim trailing spaces/tabs and copy |
+| `Ctrl+Shift+C` | Without selection, same as `Y`; with selection, plain copy |
+| `Ctrl+y` / `Ctrl+Shift+X` | Without selection, copy through counted logical-line end with trailing spaces/tabs on each line trimmed; with selection, trimmed copy |
+| Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode; Escape first cancels a pending command/search without leaving |
+| Backspace / `Ctrl+u` in search prompt | Delete one Unicode character / clear the search input |
+
+All copies go to PRIMARY and CLIPBOARD and exit copy mode. Existing visual
+selections ignore yank counts. Linewise selections (`V`, `yy`) include a final
+newline; end-of-line copies (`Y` and aliases without a selection) do not add one.
+Line-end counts use logical lines, joining soft wraps. Trimming preserves leading
+indentation and internal whitespace, and never trims at a soft-wrap boundary.
+
+Without a selection, bare `y` now waits for a motion: use `yy` for the old
+whole-line operation. Operator and motion counts multiply (`2y3w` = `6yw`).
+Character-find works standalone, in visual mode and after `y`; `f/F` include the
+target and `t/T` exclude it. Failed finds/yanks do not move, copy or exit. Repeated
+`t/T` skip the adjacent previous target, so `;` makes progress. Reversing with
+`,` does not redefine the original direction.
+
+Search spans retained history and live rows, or visible alternate-screen contents
+only. Matches may cross soft wraps but not hard newlines. Search starts beyond
+the cursor and wraps at most once per command; insufficient matches leave the
+cursor unchanged. The overlay shows the prompt, wrapping and failure notices.
+Enter accepts, Escape or `Ctrl+c` cancels the prompt, and empty Enter reuses the
+previous pattern. Search input accepts up to 256 Unicode characters. Search is
+not incremental: the cursor/visual anchor stays put until Enter. A successful
+search moves to the match start and extends an active visual selection. `N`
+does not redefine the original search direction. Patterns and character-find
+state persist across copy-mode sessions; matches are evaluated against current
+terminal contents, not a frozen snapshot.
 
 ## Xresources
 

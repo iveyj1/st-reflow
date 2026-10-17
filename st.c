@@ -253,7 +253,6 @@ static void selremove(void);
 static int regionselected(int, int, int, int);
 static void selsnap(int *, int *, int);
 
-static size_t utf8decode(const char *, Rune *, size_t);
 static Rune utf8decodebyte(char, size_t *);
 static char utf8encodebyte(Rune, size_t);
 static size_t utf8validate(Rune *, size_t);

@@ -1905,6 +1905,8 @@ xfinishdraw(void)
 {
 	if (closewarningvisible)
 		xdrawoverlay(closewarningtext, closewarningcolor);
+	else if (copymodeactive())
+		xdrawoverlay(copymodestatus(), copycursorcolor);
 	else if (splashvisible)
 		xdrawoverlay(splashtext, splashcolor);
 	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
@@ -2097,7 +2099,9 @@ kpress(XEvent *ev)
 		unsigned int mods = (e->state & ShiftMask ? CM_SHIFT : 0) |
 		    (e->state & ControlMask ? CM_CTRL : 0) |
 		    (e->state & Mod1Mask ? CM_ALT : 0);
-		char c = len == 1 ? buf[0] : 0;
+		Rune c;
+		size_t used;
+		int offset = 0;
 
 		if ((e->state & Mod1Mask) && ksym == XK_F4) {
 			requestclose(NULL);
@@ -2107,7 +2111,12 @@ kpress(XEvent *ev)
 			copymode(NULL);
 			return;
 		}
-		copymodekey(ksym, c, mods, IsModifierKey(ksym), copykeys, LEN(copykeys));
+		if (!len)
+			copymodekey(ksym, 0, mods, IsModifierKey(ksym), copykeys, LEN(copykeys));
+		while (offset < len && (used = utf8decode(buf + offset, &c, len - offset))) {
+			copymodekey(ksym, c, mods, IsModifierKey(ksym), copykeys, LEN(copykeys));
+			offset += used;
+		}
 		return;
 	}
 	copyparserreset();
