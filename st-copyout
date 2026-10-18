@@ -1,13 +1,68 @@
 #!/bin/sh
-# Using external pipe with st, give a dmenu prompt of recent commands,
-# allowing the user to copy the output of one.
-# xclip required for this script.
-# By Jaywalker and Luke
-tmpfile=$(mktemp /tmp/st-cmd-output.XXXXXX)
-trap 'rm "$tmpfile"' 0 1 15
-sed -n "w $tmpfile"
-sed -i 's/\x0//g' "$tmpfile"
-ps1="$(grep "\S" "$tmpfile" | tail -n 1 | sed 's/^\s*//' | cut -d' ' -f1)"
-chosen="$(grep -F "$ps1" "$tmpfile" | sed '$ d' | tac | dmenu -p "Copy which command's output?" -i -l 10 | sed 's/[^^]/[&]/g; s/\^/\\^/g')"
-eps1="$(echo "$ps1" | sed 's/[^^]/[&]/g; s/\^/\\^/g')"
-awk "/^$chosen$/{p=1;print;next} p&&/$eps1/{p=0};p" "$tmpfile" | xclip -selection clipboard
+# Select one completed command-output block from externalpipe history.
+# Prompt detection is heuristic: a fixed first token, anchored at line start.
+set -eu
+work=$(mktemp -d "${TMPDIR:-/tmp}/st-copyout.XXXXXXXX")
+trap 'rm -rf -- "$work"' 0
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# Never interpolate terminal text into shell commands or awk programs. Each
+# occurrence gets its own numeric ID, so repeated commands remain distinct.
+COPYOUT_WORK="$work" awk '
+{
+	gsub(/\000/, "")
+	lines[NR] = $0
+	if ($0 ~ /[^[:space:]]/)
+		last = NR
+}
+END {
+	prompt = lines[last]
+	sub(/^[[:space:]]*/, "", prompt)
+	sub(/[[:space:]].*$/, "", prompt)
+	if (prompt == "")
+		exit
+	for (i = 1; i <= NR; i++) {
+		line = lines[i]
+		sub(/^[[:space:]]*/, "", line)
+		if (substr(line, 1, length(prompt)) != prompt)
+			continue
+		rest = substr(line, length(prompt) + 1)
+		if (rest != "" && rest !~ /^[[:space:]]/)
+			continue
+		if (start) {
+			file = ENVIRON["COPYOUT_WORK"] "/" ++count
+			printf "%s", "" > file
+			for (j = start + 1; j < i; j++)
+				printf "%s\n", lines[j] > file
+			close(file)
+			menu[count] = "[" count "] " lines[start]
+		}
+		# A prompt with no command closes the previous block but starts none.
+		start = rest ~ /[^[:space:]]/ ? i : 0
+	}
+	# Only blocks terminated by another prompt are considered completed.
+	for (i = count; i > 0; i--)
+		print menu[i]
+}' > "$work/menu"
+[ -s "$work/menu" ] || exit 0
+menu=dmenu
+command -v dmenu-font >/dev/null 2>&1 && menu=dmenu-font
+choice=$("$menu" -i -l 10 -p "Copy which command's output?" < "$work/menu") || exit 0
+[ -n "$choice" ] || exit 0
+# dmenu permits arbitrary input. Accept only an exact generated menu entry.
+id=$(COPYOUT_CHOICE="$choice" awk '
+	$0 == ENVIRON["COPYOUT_CHOICE"] {
+		sub(/\].*$/, ""); sub(/^\[/, ""); print; exit
+	}' "$work/menu")
+case $id in ''|*[!0-9]*) exit 0 ;; esac
+[ -s "$work/$id" ] || exit 0
+if command -v xclip >/dev/null 2>&1; then
+	xclip -selection clipboard < "$work/$id"
+elif command -v xsel >/dev/null 2>&1; then
+	xsel -ib < "$work/$id"
+else
+	echo 'st-copyout: install xclip or xsel' >&2
+	exit 1
+fi

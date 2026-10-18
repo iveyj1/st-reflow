@@ -18,7 +18,7 @@ See AGENTS.md for the maintenance policy.
 - Keyboard/mouse scrollback, clipboard paste/copy, font zoom, anysize, Xresources at startup.
 - Geometric box drawing, no bright-on-bold, OSC 52 window operations enabled.
 - Startup splash and Alt-F4 close warning drawn as X overlays, never terminal text.
-- Reflow-aware external pipe helpers for URL open/copy and selecting a history line to copy.
+- Reflow-aware external pipe helpers for URL open/copy and selecting a command-output block to copy.
 - Vim-style keyboard copy mode that can navigate and yank offscreen scrollback.
 - Terminfo `E3` / `CSI 3 J` clears saved scrollback; unsupported OSC 8 and modern Vim probes are handled quietly.
 - Stock fontconfig fallback; no Font2 or HarfBuzz/ligatures.
@@ -42,10 +42,22 @@ The helpers are standalone and do not load any shared session/profile framework.
 They prefer the optional `dmenu-font` wrapper from the dmenu repository, which
 reads `dmenu.font` from Xresources, and fall back to plain dmenu. Terminal font
 and menu font are separate resources; both can be size 11 without a rebuild.
-`st-copyout` selects one nonempty logical history line, not a whole command-output
-region. Use keyboard copy mode for multiline selections. On the alternate screen,
-these helpers see only the currently visible rows. The URL helper recognizes
-plain HTTP(S) URLs; parenthesized URL components are not supported.
+`st-copyout` lists completed command occurrences newest-first, with numbered
+prompt/command labels so repeated commands remain distinct. It copies only the
+selected occurrence's output, excluding its prompt/command line and the next
+prompt, preserving blank lines, whitespace and line endings. Cancellation, an
+unrecognized menu entry, or empty output leaves the clipboard unchanged.
+
+Command boundaries remain heuristic, not shell integration: the first token of
+the last nonempty history line is treated as a literal prompt token, matched at
+line starts (after optional indentation) and followed by whitespace or line end.
+Use it while a shell prompt is visible. Changing/multiline prompts, continuation
+prompts, and output that resembles a prompt can confuse detection. Only blocks
+closed by another detected prompt are offered. For ambiguous output, use keyboard
+copy mode instead. Temporary files are private and removed on completion/cancel.
+On the alternate screen these helpers see only the currently visible rows.
+The URL helper recognizes plain HTTP(S) URLs; parenthesized URL components are
+not supported.
 
 Terminfo installs to `$(PREFIX)/share/terminfo`, including under DESTDIR when
 staging. Override `TERMINFO_DIR` if necessary; a nonstandard prefix may require
@@ -87,7 +99,7 @@ Edit `config.def.h` only. `config.h` is ignored and regenerated automatically wh
 | `Shift` + mouse wheel | Send PageUp/PageDown to the application |
 | `Alt+Escape` | Enter/leave keyboard copy mode |
 | `Alt+l` / `Alt+y` | Choose URL from history and open/copy it |
-| `Alt+o` | Choose a nonempty history line and copy it |
+| `Alt+o` | Choose one completed command occurrence and copy its output |
 | `Alt+F4` | Close; confirm if a process is running |
 
 ## Keyboard copy mode
