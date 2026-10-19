@@ -6,7 +6,7 @@ include config.mk
 
 SRC = st.c x.c boxdraw.c paste.c copymode.c
 OBJ = $(SRC:.c=.o)
-HELPERS = st-urlhandler st-copyout
+HELPERS = st-urlhandler st-copyout st-pathcopy
 TERMINFO_DIR = $(PREFIX)/share/terminfo
 
 # Recreate buildinfo.h when the checked-out commit changes.  Follow the

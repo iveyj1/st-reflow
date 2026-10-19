@@ -123,7 +123,7 @@ char *termname = "st-256color";
  *
  *	stty tabs
  */
-unsigned int tabspaces = 8;
+unsigned int tabspaces = 8; /* must be > 0 */
 
 /* focused and unfocused background opacity */
 // float alpha = 0.8;
@@ -305,6 +305,8 @@ static char *copyurlcmd[] =
 	{ "/bin/sh", "-c", "st-urlhandler -c", "externalpipe", NULL };
 static char *copyoutputcmd[] =
 	{ "/bin/sh", "-c", "st-copyout", "externalpipe", NULL };
+static char *copypathcmd[] =
+	{ "/bin/sh", "-c", "st-pathcopy", "externalpipe", NULL };
 
 static Shortcut shortcuts[] = {
 	/* mask                 keysym          function        argument */
@@ -336,6 +338,7 @@ static Shortcut shortcuts[] = {
 	{ MODKEY,               XK_l,           externalpipe,   {.v = openurlcmd} },
 	{ MODKEY,               XK_y,           externalpipe,   {.v = copyurlcmd} },
 	{ MODKEY,               XK_o,           externalpipe,   {.v = copyoutputcmd} },
+	{ MODKEY,               XK_p,           externalpipe,   {.v = copypathcmd} },
 };
 
 /*

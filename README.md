@@ -18,7 +18,7 @@ See AGENTS.md for the maintenance policy.
 - Keyboard/mouse scrollback, clipboard paste/copy, font zoom, anysize, Xresources at startup.
 - Geometric box drawing, no bright-on-bold, OSC 52 window operations enabled.
 - Startup splash and Alt-F4 close warning drawn as X overlays, never terminal text.
-- Reflow-aware external pipe helpers for URL open/copy and selecting a command-output block to copy.
+- Reflow-aware external pipe helpers for URL open/copy, command-output copying, and pathname copying.
 - Vim-style keyboard copy mode that can navigate and yank offscreen scrollback.
 - Terminfo `E3` / `CSI 3 J` clears saved scrollback; unsupported OSC 8 and modern Vim probes are handled quietly.
 - Stock fontconfig fallback; no Font2 or HarfBuzz/ligatures.
@@ -36,7 +36,7 @@ No distro identification, dwm, or shared session launcher is required. The
 terminal works independently under other X window managers; menu/clipboard
 programs below are dependencies only of the optional external helpers.
 
-`make install` also installs `st-urlhandler` and `st-copyout`. These need dmenu
+`make install` also installs `st-urlhandler`, `st-copyout`, and `st-pathcopy`. These need dmenu
 and either xclip or xsel; opening URLs additionally needs xdg-open (xdg-utils).
 The helpers are standalone and do not load any shared session/profile framework.
 They prefer the optional `dmenu-font` wrapper from the dmenu repository, which
@@ -58,6 +58,25 @@ copy mode instead. Temporary files are private and removed on completion/cancel.
 On the alternate screen these helpers see only the currently visible rows.
 The URL helper recognizes plain HTTP(S) URLs; parenthesized URL components are
 not supported.
+
+`Alt+p` runs `st-pathcopy`, a heuristic path-copy picker. It recognizes absolute
+paths (`/etc/var/log/foo`), home-relative paths (`~/.bashrc`), explicit relative
+paths (`./file`, `../file`) and slash-containing relative paths (`mydir/myfile`,
+`mydir/`). Directory names marked with `/` by `ls -F` are recognized; bare file
+names from directory listings are still excluded.
+Quoted paths may contain spaces and punctuation; surrounding quotes are removed.
+For unquoted candidates, common delimiters and trailing punctuation are stripped.
+URLs, bare filenames, and simple numeric fractions/dates are ignored. Other false
+positives (for example Git branch names) and missed paths are still possible.
+
+Candidates are deduplicated with the most recent occurrence first. Soft-wrapped
+paths are joined by externalpipe, but hard line breaks cannot be joined reliably.
+Only an exact detected menu entry can be copied; cancelling or entering other text
+leaves the clipboard unchanged. The selected spelling is copied without a final
+newline. Nothing is opened, executed, expanded or checked for local existence:
+`~` and relative paths remain literal, which also permits copying remote paths.
+No historical working-directory information is inferred. Like the other helpers,
+it uses the available normal-screen history or visible alternate-screen rows.
 
 Terminfo installs to `$(PREFIX)/share/terminfo`, including under DESTDIR when
 staging. Override `TERMINFO_DIR` if necessary; a nonstandard prefix may require
@@ -100,6 +119,7 @@ Edit `config.def.h` only. `config.h` is ignored and regenerated automatically wh
 | `Alt+Escape` | Enter/leave keyboard copy mode |
 | `Alt+l` / `Alt+y` | Choose URL from history and open/copy it |
 | `Alt+o` | Choose one completed command occurrence and copy its output |
+| `Alt+p` | Choose a detected pathname and copy its literal spelling |
 | `Alt+F4` | Close; confirm if a process is running |
 
 ## Keyboard copy mode

@@ -1,0 +1,77 @@
+#!/bin/sh
+# Copy a likely pathname from externalpipe text, without resolving or opening it.
+set -eu
+paths=$(awk '
+function candidate(path, quoted) {
+	if (!quoted)
+		sub(/[.,;:!?)}\]]+$/, "", path)
+	if (path ~ /[[:cntrl:]]/ || path ~ /[[:alpha:]][[:alnum:]+.-]*:\/\// ||
+	    path ~ /^www\./ || path ~ /^[0-9]+(\/[0-9]+)+\/?$/)
+		return
+	if (path ~ /^\/[^\/]/ || path ~ /^~\// || path ~ /^\.\.?\// ||
+	    (path ~ /^[[:alnum:]_.][[:alnum:]_. -]*\/([^\/]|$)/ &&
+	     (quoted || path !~ /[[:space:]]/)))
+		found[++count] = path
+}
+{
+	gsub(/\000/, "")
+	i = 1
+	while (i <= length($0)) {
+		c = substr($0, i, 1)
+		if (c ~ /[[:space:]=<>()[\]{};,]/) {
+			i++
+			continue
+		}
+		# A quote at token start encloses one candidate, including spaces.
+		if (c == "\042" || c == "\047") {
+			quote = c
+			start = ++i
+			while (i <= length($0)) {
+				c = substr($0, i, 1)
+				if (c == quote)
+					break
+				if (c == "\\")
+					i++
+				i++
+			}
+			if (i <= length($0))
+				candidate(substr($0, start, i - start), 1)
+			i++
+			continue
+		}
+		# Consume entire URLs, including query-string assignments, rather
+		# than mistaking /paths inside their queries for filesystem paths.
+		if (substr($0, i) ~ /^([[:alpha:]][[:alnum:]+.-]*:\/\/|www\.)/) {
+			while (i <= length($0) && substr($0, i, 1) !~ /[[:space:]\042\047]/)
+				i++
+			continue
+		}
+		start = i
+		while (i <= length($0) && substr($0, i, 1) !~ /[[:space:]=<>()[\]{};,]/)
+			i++
+		candidate(substr($0, start, i - start), 0)
+	}
+}
+END {
+	for (i = count; i > 0; i--)
+		if (!seen[found[i]]++)
+			print found[i]
+}')
+[ -n "$paths" ] || exit 0
+menu=dmenu
+command -v dmenu-font >/dev/null 2>&1 && menu=dmenu-font
+choice=$(printf '%s\n' "$paths" | "$menu" -i -l 10 -p 'Copy which path?') || exit 0
+[ -n "$choice" ] || exit 0
+# Accept only a detected entry, not arbitrary text entered into dmenu.
+printf '%s\n' "$paths" | PATHCOPY_CHOICE="$choice" awk '
+	$0 == ENVIRON["PATHCOPY_CHOICE"] { found = 1 }
+	END { exit !found }
+' || exit 0
+if command -v xclip >/dev/null 2>&1; then
+	printf '%s' "$choice" | xclip -selection clipboard
+elif command -v xsel >/dev/null 2>&1; then
+	printf '%s' "$choice" | xsel -ib
+else
+	echo 'st-pathcopy: install xclip or xsel' >&2
+	exit 1
+fi

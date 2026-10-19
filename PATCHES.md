@@ -21,7 +21,7 @@ The upstream merge kept reflow's alternate-screen storage and five-argument `tcl
 
 - Active-line resize policy: `reflowactive = 0` clears an unfinished foreground-shell logical line after cursor mapping so readline can repaint it without stale prompt copies entering history. Set `reflowactive = 1` for standard reflow-patch behavior.
 - Reflow-aware external pipe exports primary-screen history oldest-first, appends visible content, joins soft wraps, skips unused trailing rows, and exposes visible alternate-screen rows to helpers.
-- URL and command-output helpers use `st-urlhandler` and `st-copyout` through `Alt+l`, `Alt+y`, and `Alt+o`.
+- URL, command-output and pathname helpers use `st-urlhandler`, `st-copyout` and `st-pathcopy` through `Alt+l`, `Alt+y`, `Alt+o` and `Alt+p`. Path detection is heuristic and copies literal spellings without expansion or opening.
 - Keyboard copy mode replaces the old normal/browse mode with local Vim-style navigation and yanking over current reflowed physical rows.
 - Alt-F4/window close uses process detection plus a nonblocking Xft confirmation overlay instead of spawning dmenu.
 - Startup splash is an X overlay, not terminal output.

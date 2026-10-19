@@ -99,6 +99,77 @@ class Helpers(unittest.TestCase):
             self.assertEqual((self.base / 'out.wrapper').read_text(), 'wrapper\n')
             (self.base / 'out.wrapper').unlink()
 
+    def test_paths_and_recency(self):
+        data = 'old ~/.bashrc /etc/var/log/foo\nmydir/myfile ./local ../parent ~/.bashrc\n'
+        result = self.run_helper('st-pathcopy', data, CHOICE='~/.bashrc')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.base / 'out').read_text(), '~/.bashrc')
+        self.assertEqual((self.base / 'menu-input').read_text(),
+                         '~/.bashrc\n../parent\n./local\nmydir/myfile\n/etc/var/log/foo')
+        self.assertEqual((self.base / 'out.args').read_text().strip(), '-selection clipboard')
+
+    def test_ls_classified_directories(self):
+        data = ('total 8\n'
+                'drwxr-xr-x 2 user user 4096 Oct 18 12:00 src/\n'
+                '-rw-r--r-- 1 user user   42 Oct 18 12:00 README\n'
+                '-rwxr-xr-x 1 user user   42 Oct 18 12:00 script*\n'
+                'drwxr-xr-x 2 user user 4096 Oct 18 12:00 "my docs/"\n')
+        for choice in ('src/', 'my docs/'):
+            result = self.run_helper('st-pathcopy', data, CHOICE=choice)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.base / 'out').read_text(), choice)
+            self.assertEqual((self.base / 'menu-input').read_text(), 'my docs/\nsrc/')
+
+    def test_quoted_paths(self):
+        data = '\"/tmp/my file\" \'my dir/界.txt\' \"/tmp/a[1](x).txt\"\n'
+        for choice in ('/tmp/my file', 'my dir/界.txt', '/tmp/a[1](x).txt'):
+            result = self.run_helper('st-pathcopy', data, CHOICE=choice)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.base / 'out').read_text(), choice)
+
+    def test_path_punctuation_and_urls(self):
+        data = ('path=/etc/config; (/tmp/foo), [../bar]. <~/.bashrc>\n'
+                'https://example.org/?p=/wrong&x=~/bad www.example.org/file '
+                'url=file:///tmp/wrong 2026/10/22 1/2 barefile\n')
+        result = self.run_helper('st-pathcopy', data, CHOICE='/etc/config')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.base / 'menu-input').read_text(),
+                         '~/.bashrc\n../bar\n/tmp/foo\n/etc/config')
+
+    def test_path_copy_never_executes(self):
+        path = '/tmp/$(touch ' + str(self.base / 'executed') + ')'
+        result = self.run_helper('st-pathcopy', "'" + path + "'", CHOICE=path)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.base / 'out').read_text(), path)
+        self.assertFalse((self.base / 'executed').exists())
+
+    def test_path_cancellation_and_invalid_input(self):
+        (self.base / 'out').write_text('unchanged')
+        for data, env in (
+                ('/does/not/exist', {'CANCEL': '1'}),
+                ('/does/not/exist', {'CHOICE': ''}),
+                ('/does/not/exist', {'CHOICE': '/not/a/detected/path'}),
+                ('no paths here 1/2 2026/10/22 https://example.org/a', {}),
+                ('"/unfinished quoted path', {})):
+            result = self.run_helper('st-pathcopy', data, **env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((self.base / 'out').read_text(), 'unchanged')
+
+    def test_path_font_wrapper_and_xsel(self):
+        self.mock('dmenu-font', 'echo wrapper > "$OUT.wrapper"; exec dmenu "$@"')
+        (self.base / 'xclip').rename(self.base / 'xsel')
+        result = self.run_helper('st-pathcopy', '/does/not/exist')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual((self.base / 'out.wrapper').read_text(), 'wrapper\n')
+        self.assertEqual((self.base / 'out.args').read_text().strip(), '-ib')
+        self.assertEqual((self.base / 'out').read_text(), '/does/not/exist')
+
+    def test_path_missing_clipboard(self):
+        (self.base / 'xclip').unlink()
+        result = self.run_helper('st-pathcopy', '~/.bashrc')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('install xclip or xsel', result.stderr)
+
     def test_url_selection(self):
         result = self.run_helper('st-urlhandler',
                                  'https://example.org/a. https://example.org/a\nhttp://other.test\n',
