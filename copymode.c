@@ -24,6 +24,33 @@ static Rune searchtext[SEARCHLENGTH], searchinput[SEARCHLENGTH];
 static int searchlen, inputlen, searchdirection = 1;
 static const char *copymessage = "";
 
+/* Prefix-free labels: home-row singles, other letters start doubles. */
+#define FLASHMAX 512
+static struct { CPos pos; char label[8]; } flashtargets[FLASHMAX];
+static int flashstate, flashcount, flashprefix;
+static long long flashtop;
+/* state: 1 = Space leader, 2 = character, 3 = label */
+
+void
+copyflashcancel(void)
+{
+	if (!flashstate)
+		return;
+	flashstate = flashcount = flashprefix = 0;
+	copymessage = "";
+	termdirty();
+}
+
+const char *
+copyflashlabel(int index, int *x, int *y)
+{
+	if (flashstate != 3 || index >= flashcount)
+		return NULL;
+	*x = flashtargets[index].pos.x;
+	*y = flashtargets[index].pos.y - termview().top;
+	return flashtargets[index].label;
+}
+
 static CPos
 clamp(CPos p, int rectangle)
 {
@@ -79,6 +106,8 @@ copymodesync(void)
 {
 	if (copyactive)
 		applymotion((CMotion){{copyy, copyx}, M_EXCL, 1});
+	if (flashstate && termview().top != flashtop)
+		copyflashcancel();
 }
 
 void
@@ -396,6 +425,7 @@ copymodemouse(int x, int y, int drag)
 
 	if (!copyactive)
 		return;
+	copyparserreset();
 	if (drag && !copyvisual) {
 		copyvisual = COPY_CHAR;
 		termselstart((CPos){copyy, copyx}, 0);
@@ -416,12 +446,13 @@ copymodecursor(int *x, int *y)
 int
 copymodenumber(int row)
 {
-	return copyactive && copynumbers && row != copyview() ? abs(row - copyview()) : 0;
+	return copyactive && !flashstate && copynumbers && row != copyview() ? abs(row - copyview()) : 0;
 }
 
 void
 copyparserreset(void)
 {
+	copyflashcancel();
 	parserstate = CP_IDLE;
 	pendingcount = pendingyank = operatorcount = commandcount = inputlen = 0;
 	copymessage = "";
@@ -528,6 +559,10 @@ copymodestatus(void)
 
 	if (!copyactive)
 		return "";
+	if (flashstate)
+		return flashstate == 1 ? "Flash: s" : flashstate == 2 ?
+		    "Flash: character" : flashprefix ? "Flash: second label letter" :
+		    "Flash: label (Escape cancels)";
 	if (parserstate == CP_SEARCH) {
 		*p++ = inputdirection > 0 ? '/' : '?';
 		for (i = 0; i < inputlen; i++)
@@ -542,6 +577,132 @@ copymodestatus(void)
 	return pendingyank ? "y: motion or y" : "";
 }
 
+static void
+flashstart(Rune ch)
+{
+	static const char singles[] = "asdfghjkl";
+	static const char first[] = "qwertyuiopzxcvbnm";
+	static const char second[] = "asdfghjklqwertyuiopzxcvbnm";
+	CPos after[FLASHMAX], before[FLASHMAX], p;
+	char labels[FLASHMAX][8] = {{0}};
+	TView v = termview();
+	int na = 0, nb = 0, a = 0, b = 0, nl = 0, i, j, x, width, turn = 0;
+	long long y;
+	const Glyph *line;
+
+	/* Scan outwards from the cursor, retaining the nearest visible matches. */
+	for (y = MAX(copyy, v.top); y <= MIN(v.last, v.top + v.rows - 1); y++) {
+		line = termline(y);
+		for (x = y == copyy ? copyx + 1 : 0; x < v.cols && na < FLASHMAX; x++)
+			if ((line[x].mode & ATTR_SET) && !(line[x].mode & ATTR_WDUMMY) && line[x].u == ch)
+				after[na++] = (CPos){y, x};
+	}
+	for (y = MIN(copyy, v.top + v.rows - 1); y >= MAX(v.first, v.top); y--) {
+		line = termline(y);
+		for (x = y == copyy ? copyx - 1 : v.cols - 1; x >= 0 && nb < FLASHMAX; x--)
+			if ((line[x].mode & ATTR_SET) && !(line[x].mode & ATTR_WDUMMY) && line[x].u == ch)
+				before[nb++] = (CPos){y, x};
+	}
+	labels[nl][utf8encode(ch, labels[nl])] = '\0';
+	nl++;
+	for (i = 0; singles[i]; i++)
+		if ((Rune)singles[i] != ch)
+			labels[nl++][0] = singles[i];
+	for (i = 0; first[i]; i++)
+		if ((Rune)first[i] != ch)
+			for (j = 0; second[j]; j++) {
+				labels[nl][0] = first[i];
+				labels[nl++][1] = second[j];
+			}
+	flashcount = 0;
+	while ((a < na || b < nb) && flashcount < nl) {
+		/* First forward, then alternate forward and backward like vigor. */
+		if (a < na && (!turn || b >= nb))
+			p = after[a++];
+		else
+			p = before[b++];
+		turn = flashcount ? !turn : 0;
+		width = flashcount == 0 ? MAX(1, wcwidth(ch)) : strlen(labels[flashcount]);
+		if (p.x + width > v.cols)
+			continue;
+		line = termline(p.y);
+		if (line[p.x].mode & ATTR_WDUMMY)
+			continue;
+		for (i = 1; i < width; i++)
+			if ((line[p.x + i].mode & (ATTR_WIDE | ATTR_WDUMMY)) &&
+			    !(i == 1 && (line[p.x].mode & ATTR_WIDE)))
+				break;
+		if (i < width)
+			continue;
+		for (i = 0; i < flashcount; i++)
+			if (flashtargets[i].pos.y == p.y && abs(flashtargets[i].pos.x - p.x) <= 1)
+				break;
+		if (i < flashcount)
+			continue;
+		flashtargets[flashcount].pos = p;
+		strcpy(flashtargets[flashcount].label, labels[flashcount]);
+		flashcount++;
+	}
+	flashstate = 3;
+	if (flashcount == 1) {
+		p = flashtargets[0].pos;
+		copyparserreset();
+		applymotion((CMotion){p, M_INCL, 1});
+	} else if (!flashcount) {
+		copyparserreset();
+		copymessage = "Flash: no targets";
+	}
+	termdirty();
+}
+
+static void
+flashkey(int ch, unsigned int mods)
+{
+	char input[8] = {0};
+	int i;
+	CPos p;
+
+	if (mods & (CM_CTRL | CM_ALT)) {
+		copyparserreset();
+		return;
+	}
+	if (flashstate == 1) {
+		if (ch == 's')
+			flashstate = 2;
+		else
+			copyparserreset();
+	} else if (flashstate == 2) {
+		if (ch >= 32 && iswprint(ch))
+			flashstart(ch);
+		else
+			copyparserreset();
+	} else if (ch > 0) {
+		if (flashprefix) {
+			input[0] = flashprefix;
+			utf8encode(ch, input + 1);
+		} else {
+			utf8encode(ch, input);
+		}
+		for (i = 0; i < flashcount; i++) {
+			if (!strcmp(input, flashtargets[i].label)) {
+				p = flashtargets[i].pos;
+				copyparserreset();
+				applymotion((CMotion){p, M_INCL, 1});
+				return;
+			}
+		}
+		for (i = 0; i < flashcount; i++)
+			if (!strncmp(input, flashtargets[i].label, strlen(input))) {
+				flashprefix = ch;
+				return;
+			}
+		copyparserreset();
+	} else {
+		copyparserreset();
+	}
+	termdirty();
+}
+
 void
 copymodekey(unsigned long key, int ch, unsigned int mods, int modifier,
     const CopyKey *keys, size_t nkeys)
@@ -554,13 +715,25 @@ copymodekey(unsigned long key, int ch, unsigned int mods, int modifier,
 	if (modifier || !copyactive)
 		return;
 	copymodesync();
-	if (escape && (parserstate != CP_IDLE || pendingyank)) {
+	if (escape && (flashstate || parserstate != CP_IDLE || pendingyank)) {
 		copyparserreset();
 		termdirty();
 		return;
 	}
+	if (flashstate) {
+		flashkey(ch, mods);
+		return;
+	}
 	if (mods & CM_ALT)
 		return;
+	if (!(mods & CM_CTRL) && ch == ' ' &&
+	    parserstate != CP_SEARCH && parserstate != CP_FIND) {
+		copyparserreset();
+		flashstate = 1;
+		flashtop = termview().top;
+		termdirty();
+		return;
+	}
 	if (parserstate == CP_SEARCH) {
 		copymessage = "";
 		if (key == 0xff0d || ch == '\r') {

@@ -24,5 +24,7 @@ int copymodecursor(int *, int *);
 int copymodenumber(int);
 void copymodekey(unsigned long, int, unsigned int, int, const CopyKey *, size_t);
 void copyparserreset(void);
+void copyflashcancel(void);
+const char *copyflashlabel(int, int *, int *);
 const char *copymodestatus(void);
 #endif

@@ -30,6 +30,7 @@ void xbell(void);
 void xclipcopy(void);
 void xdrawcopycursor(int, int, int);
 void xdrawcopynumber(int, int, int, int);
+void xdrawcopylabel(int, int, const char *);
 void xdrawcursor(int, int, Glyph, int, int, Glyph);
 void xdrawline(Line, int, int, int);
 void xfinishdraw(void);

@@ -277,6 +277,81 @@ keysequence(const char *s)
 }
 
 static void
+testflash(void)
+{
+	int alt, x, y, i;
+	CPos target;
+	char label[8];
+
+	for (alt = 0; alt < 2; alt++) {
+		if (alt)
+			feed("\033[?1049h");
+		kscrolldown(&(Arg){.i = HISTSIZE});
+		feed("\033[3J\033[2J\033[Halpha apple ash\r\nbanana");
+		copymode(NULL);
+		copymodemouse(0, 0, 0);
+		keysequence(" sa");
+		assert(flashstate == 3 && flashcount > 1);
+		assert(!strcmp(copyflashlabel(0, &x, &y), "a") && x == 4 && y == 0);
+		assert(!copymodenumber(1));
+		keysequence("a");
+		assert(copyx == 4 && !flashstate && copyactive);
+		copymodemouse(0, 0, 0);
+		keysequence("v saa");
+		{
+			char *text = getsel();
+			assert(text && !strcmp(text, "alpha"));
+			harnessfree(text);
+		}
+		keysequence("v");
+		keysequence("v sa");
+		target = flashtargets[1].pos;
+		strcpy(label, flashtargets[1].label);
+		keysequence(label);
+		assert(copyx == target.x && copyy == target.y && copyvisual);
+		keysequence(" sa\033");
+		assert(!flashstate && copyactive);
+		keysequence(" sa");
+		feed("!");
+		assert(!flashstate && copyactive);
+		keysequence(" sz");
+		assert(!flashstate && copyactive); /* no match */
+		keysequence("v se");
+		assert(!flashstate && copyx == 10); /* single match */
+		keysequence(" \033");
+		assert(!flashstate && copyactive);
+		copymodeaction(COPY_EXIT, 1);
+		feed("\033[2J\033[H");
+		for (i = 0; i < 8; i++)
+			feed("a a a a a a a a a a\r\n");
+		copymode(NULL);
+		copymodemouse(0, 0, 0);
+		keysequence(" sa");
+		assert(flashcount > 10);
+		target = flashtargets[10].pos;
+		strcpy(label, flashtargets[10].label);
+		assert(strlen(label) == 2);
+		keysequence(label);
+		assert(!flashstate && copyx == target.x && copyy == target.y);
+		copymodeaction(COPY_EXIT, 1);
+		feed("\033[2J\033[H界 x 界 x 界");
+		copymode(NULL);
+		copymodemouse(0, 0, 0);
+		keysequence(" s界");
+		assert(flashstate == 3 && flashcount == 2);
+		keysequence("界");
+		assert(!flashstate && copyx == 5);
+		keysequence(" sx\033");
+		assert(copyactive && !flashstate);
+		keysequence(" sx");
+		feed(alt ? "\033[?1049l" : "\033[?1049h");
+		assert(!copyactive && !flashstate);
+		if (!alt)
+			feed("\033[?1049l");
+	}
+}
+
+static void
 testmotions(void)
 {
 	CPos from, saved;
@@ -552,6 +627,7 @@ main(void)
 	testmouse();
 	testmotions();
 	testparser();
+	testflash();
 	testcommands();
 	testreflow();
 	testexternalpipe();

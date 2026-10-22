@@ -38,6 +38,12 @@ xdrawcopycursor(int x, int y, int v)
 }
 
 void
+xdrawcopylabel(int x, int y, const char *text)
+{
+	(void)x; (void)y; (void)text;
+}
+
+void
 xdrawcopynumber(int y, int d, int r, int c)
 {
 	(void)y; (void)d; (void)r; (void)c;

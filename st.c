@@ -3080,6 +3080,10 @@ twrite(const char *buf, int buflen, int show_ctrl)
 	Rune u;
 	int n;
 
+	/* Any new terminal output can invalidate visible flash coordinates. */
+	if (buflen)
+		copyflashcancel();
+
 	for (n = 0; n < buflen; n += charsize) {
 		if (IS_SET(MODE_UTF8)) {
 			/* process a complete utf8 char */
@@ -3466,6 +3470,12 @@ draw(void)
 	}
 	term.ocx = cx;
 	term.ocy = term.c.y;
+	{
+		int i, x, y;
+		const char *label;
+		for (i = 0; (label = copyflashlabel(i, &x, &y)); i++)
+			xdrawcopylabel(x, y, label);
+	}
 	xfinishdraw();
 	if (ocx != term.ocx || ocy != term.ocy)
 		xximspot(term.ocx, term.ocy);

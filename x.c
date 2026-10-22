@@ -4,6 +4,7 @@
 #include <math.h>
 #include <limits.h>
 #include <locale.h>
+#include <wchar.h>
 #include <signal.h>
 #include <sys/select.h>
 #include <time.h>
@@ -1829,6 +1830,35 @@ xdrawcopynumber(int y, int distance, int rows, int cols)
 	}
 	n = xmakeglyphfontspecs(xw.specbuf, glyphs, len, 0, y);
 	xdrawglyphfontspecs(xw.specbuf, base, n, 0, y);
+}
+
+void
+xdrawcopylabel(int x, int y, const char *text)
+{
+	Glyph glyphs[8], base = {.mode = ATTR_BOLD, .fg = defaultbg, .bg = copycursorcolor};
+	Rune u;
+	int n = 0, len, width, specs;
+
+	while (*text && n < 6) {
+		len = utf8decode(text, &u, strlen(text));
+		if (!len)
+			break;
+		text += len;
+		width = MAX(1, wcwidth(u));
+		glyphs[n] = base;
+		glyphs[n].u = u;
+		if (width == 2)
+			glyphs[n].mode |= ATTR_WIDE;
+		n++;
+		if (width == 2) {
+			glyphs[n] = base;
+			glyphs[n++].mode = ATTR_WDUMMY;
+		}
+	}
+	if (n && (glyphs[0].mode & ATTR_WIDE))
+		base.mode |= ATTR_WIDE;
+	specs = xmakeglyphfontspecs(xw.specbuf, glyphs, n, x, y);
+	xdrawglyphfontspecs(xw.specbuf, base, specs, x, y);
 }
 
 void

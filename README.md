@@ -162,6 +162,7 @@ an unsuccessful copy does not exit selection mode.
 | `/` / `?` + text + Enter | Literal, case-sensitive forward / backward search over available history |
 | `n` / `N` | Repeat search in original / reversed direction; counts supported |
 | `Ctrl+n` | Toggle relative row numbers |
+| Space, `s`, character, label | Flash jump to a visible character (case-sensitive); extends visual selections |
 | `y` | Copy existing selection; otherwise await a motion (e.g. `3yw`, `y3W`, `yt,`, `yf:`, `yT,`, `yF:`) |
 | `yy` | Copy counted whole logical lines, including the final newline; `3yy` and `y3y` are equivalent |
 | `Y` | Without selection, copy through counted logical-line end; with selection, trim trailing spaces/tabs and copy |
@@ -169,6 +170,16 @@ an unsuccessful copy does not exit selection mode.
 | `Ctrl+y` / `Ctrl+Shift+X` | Without selection, copy through counted logical-line end with trailing spaces/tabs on each line trimmed; with selection, trimmed copy |
 | Escape, `q`, `i`, Enter, `Ctrl+c` | Leave copy mode; Escape first cancels a pending command/search without leaving |
 | Backspace / `Ctrl+u` in search prompt | Delete one Unicode character / clear the search input |
+
+Flash searches only the current viewport on either screen, excluding the copy
+cursor's own cell. The first forward match (or nearest preceding match) gets
+the searched character as its label. Home-row letters label other targets;
+two-letter labels handle larger sets. A single eligible target jumps immediately.
+Labels avoid overlaps and row edges. Relative numbers are hidden during flash;
+labels never enter copied text. Escape cancels flash without leaving copy mode.
+New terminal output, mouse positioning, scrolling, resize, or screen switches
+cancel flash to avoid stale targets. Numeric prefixes and pending yank operators
+are cleared when starting flash; use `v`, flash, then `y` to copy a range.
 
 All copies go to PRIMARY and CLIPBOARD and exit copy mode. Existing visual
 selections ignore yank counts. Linewise selections (`V`, `yy`) include a final
