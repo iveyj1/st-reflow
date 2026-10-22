@@ -1683,7 +1683,7 @@ xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
 	Color drawcol;
 
 	/* remove the old cursor */
-	if (selected(ox, oy))
+	if (selected(ox, oy) || yankflashselected(ox, oy))
 		og.mode ^= ATTR_REVERSE;
 	xdrawglyph(og, ox, oy);
 
@@ -1698,7 +1698,7 @@ xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
 	if (IS_SET(MODE_REVERSE)) {
 		g.mode |= ATTR_REVERSE;
 		g.bg = defaultfg;
-		if (selected(cx, cy)) {
+		if (selected(cx, cy) || yankflashselected(cx, cy)) {
 			drawcol = dc.col[defaultcs];
 			g.fg = defaultrcs;
 		} else {
@@ -1706,7 +1706,7 @@ xdrawcursor(int cx, int cy, Glyph g, int ox, int oy, Glyph og)
 			g.fg = defaultcs;
 		}
 	} else {
-		if (selected(cx, cy)) {
+		if (selected(cx, cy) || yankflashselected(cx, cy)) {
 			g.fg = defaultfg;
 			g.bg = defaultrcs;
 		} else {
@@ -1874,7 +1874,7 @@ xdrawline(Line line, int x1, int y1, int x2)
 		new = line[x];
 		if (new.mode == ATTR_WDUMMY)
 			continue;
-		if (selected(x, y1))
+		if (selected(x, y1) || yankflashselected(x, y1))
 			new.mode ^= ATTR_REVERSE;
 		if (i > 0 && ATTRCMP(base, new)) {
 			xdrawglyphfontspecs(specs, base, i, ox, y1);
@@ -2310,18 +2310,21 @@ run(void)
 				continue;  /* we have time, try to find idle */
 		}
 
+		/* Expiry dirties the display; a deadline wakes pselect without blocking input. */
+		timeout = yankflashremaining();
 		/* idle detected or maxlatency exhausted -> draw */
-		timeout = -1;
 		if (blinktimeout && tattrset(ATTR_BLINK)) {
-			timeout = blinktimeout - TIMEDIFF(now, lastblink);
-			if (timeout <= 0) {
-				if (-timeout > blinktimeout) /* start visible */
+			double remain = blinktimeout - TIMEDIFF(now, lastblink);
+			if (remain <= 0) {
+				if (-remain > blinktimeout) /* start visible */
 					win.mode |= MODE_BLINK;
 				win.mode ^= MODE_BLINK;
 				tsetdirtattr(ATTR_BLINK);
 				lastblink = now;
-				timeout = blinktimeout;
+				remain = blinktimeout;
 			}
+			if (timeout < 0 || remain < timeout)
+				timeout = remain;
 		}
 		if (splashvisible) {
 			double remain = splashtimeout - TIMEDIFF(now, splashstart);

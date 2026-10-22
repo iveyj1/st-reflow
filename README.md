@@ -181,6 +181,13 @@ New terminal output, mouse positioning, scrolling, resize, or screen switches
 cancel flash to avoid stale targets. Numeric prefixes and pending yank operators
 are cleared when starting flash; use `v`, flash, then `y` to copy a range.
 
+Yanks made without an existing highlighted selection briefly invert the copied
+source range for 200 ms after leaving copy mode. This is a non-blocking rendering
+overlay, not a selection; clipboard contents are unaffected. Output, scrolling,
+resize, screen switches, or starting a new selection/copy session cancel it.
+Trimmed yanks highlight the source range before trimming. Already-highlighted
+visual selections do not produce this flash.
+
 All copies go to PRIMARY and CLIPBOARD and exit copy mode. Existing visual
 selections ignore yank counts. Linewise selections (`V`, `yy`) include a final
 newline; end-of-line copies (`Y` and aliases without a selection) do not add one.

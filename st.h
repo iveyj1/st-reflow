@@ -133,6 +133,10 @@ void selinit(void);
 void selstart(int, int, int);
 void selextend(int, int, int, int);
 int selected(int, int);
+void yankflashstart(void);
+void yankflashcancel(void);
+double yankflashremaining(void);
+int yankflashselected(int, int);
 char *getsel(void);
 void seltrimtrailingws(char *);
 

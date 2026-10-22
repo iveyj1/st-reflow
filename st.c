@@ -16,6 +16,7 @@
 #include <termios.h>
 #include <unistd.h>
 #include <wchar.h>
+#include <time.h>
 #include <wctype.h>
 
 #include "st.h"
@@ -264,7 +265,9 @@ static ssize_t xwrite(int, const char *, size_t);
 
 /* Globals */
 static Term term;
-static Selection sel;
+static Selection sel, yankselection;
+static int yankvisible;
+static struct timespec yankstart;
 static CSIEscape csiescseq;
 static STREscape strescseq;
 static int iofd = 1;
@@ -494,6 +497,7 @@ tgetline(char *buf, const Glyph *fgp)
 void
 selstart(int col, int row, int snap)
 {
+	yankflashcancel();
 	selclear();
 	sel.mode = SEL_EMPTY;
 	sel.type = SEL_REGULAR;
@@ -583,6 +587,58 @@ regionselected(int x1, int y1, int x2, int y2)
 selected(int x, int y)
 {
     return regionselected(x, y, x, y);
+}
+
+/* Rendering-only copy of normalized selection coordinates. */
+void
+yankflashstart(void)
+{
+	if (sel.ob.x == -1)
+		return;
+	yankselection = sel;
+	clock_gettime(CLOCK_MONOTONIC, &yankstart);
+	yankvisible = 1;
+	tfulldirt();
+}
+
+void
+yankflashcancel(void)
+{
+	if (yankvisible) {
+		yankvisible = 0;
+		tfulldirt();
+	}
+}
+
+double
+yankflashremaining(void)
+{
+	struct timespec now;
+	double remain;
+
+	if (!yankvisible)
+		return -1;
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	remain = 200 - TIMEDIFF(now, yankstart);
+	if (remain <= 0) {
+		yankflashcancel();
+		return -1;
+	}
+	return remain;
+}
+
+int
+yankflashselected(int x, int y)
+{
+	Selection *s = &yankselection;
+
+	if (!yankvisible || s->alt != IS_SET(MODE_ALTSCREEN) ||
+	    y < s->nb.y || y > s->ne.y)
+		return 0;
+	if (s->type == SEL_RECTANGULAR)
+		return x >= s->nb.x && x <= s->ne.x;
+	return (y != s->nb.y || x >= s->nb.x) &&
+	    (y != s->ne.y || x <= s->ne.x);
 }
 
 
@@ -1344,6 +1400,7 @@ tswapscreen(void)
 	Line *tmpline = term.line;
 	int tmpcol = term.col, tmprow = term.row;
 
+	yankflashcancel();
 	/* The copy cursor and selection belong to the screen being left. */
 	if (copymodeactive())
 		copymodeaction(COPY_EXIT, 1);
@@ -1401,6 +1458,8 @@ kscrolldown(const Arg* a)
 {
     int n = a->i;
 
+    yankflashcancel();
+
     if (!term.scr || IS_SET(MODE_ALTSCREEN))
         return;
 
@@ -1424,6 +1483,8 @@ void
 kscrollup(const Arg* a)
 {
     int n = a->i;
+
+    yankflashcancel();
 
     if (!term.histf || IS_SET(MODE_ALTSCREEN))
         return;
@@ -3081,8 +3142,10 @@ twrite(const char *buf, int buflen, int show_ctrl)
 	int n;
 
 	/* Any new terminal output can invalidate visible flash coordinates. */
-	if (buflen)
+	if (buflen) {
 		copyflashcancel();
+		yankflashcancel();
+	}
 
 	for (n = 0; n < buflen; n += charsize) {
 		if (IS_SET(MODE_UTF8)) {
@@ -3151,6 +3214,8 @@ void
 tresize(int col, int row)
 {
 	int *bp;
+
+	yankflashcancel();
 
 	if (copymodeactive() && (col != term.col || row != term.row))
 		copymodeaction(COPY_EXIT, 1);

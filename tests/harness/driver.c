@@ -449,6 +449,52 @@ controlkey(unsigned long key)
 }
 
 static void
+testyankflash(void)
+{
+	int alt;
+
+	for (alt = 0; alt < 2; alt++) {
+		if (alt)
+			feed("\033[?1049h");
+		copyfixture("one two\r\nthree", 40);
+		keysequence("yw");
+		assert(!copyactive && sel.ob.x == -1 && yankvisible);
+		assert(!strcmp(lastselection, "one "));
+		assert(yankflashselected(0, 0) && yankflashselected(3, 0));
+		assert(!yankflashselected(4, 0) && !yankflashselected(0, 1));
+		assert(yankflashremaining() > 0 && yankflashremaining() <= 200);
+		yankstart.tv_sec--; /* Expire without sleeping/blocking. */
+		assert(yankflashremaining() < 0 && !yankvisible && term.dirty[0]);
+		assert(!yankflashselected(0, 0));
+		copyfixture("one two", 40);
+		keysequence("vwy");
+		assert(!copyactive && !yankvisible); /* Already highlighted. */
+		copyfixture("one two", 40);
+		keysequence("yy");
+		assert(yankvisible);
+		feed("!");
+		assert(!yankvisible);
+		copyfixture("one two", 40);
+		keysequence("Y");
+		assert(yankvisible);
+		kscrollup(&(Arg){.i = 1});
+		assert(!yankvisible);
+		copyfixture("one two", 40);
+		controlkey(XK_y);
+		assert(yankvisible);
+		resize(41, 6);
+		assert(!yankvisible);
+		copyfixture("one two", 40);
+		keysequence("yy");
+		assert(yankvisible);
+		feed(alt ? "\033[?1049l" : "\033[?1049h");
+		assert(!yankvisible);
+		if (!alt)
+			feed("\033[?1049l");
+	}
+}
+
+static void
 testcommands(void)
 {
 	const char *words = "one two three four five six seven";
@@ -629,6 +675,7 @@ main(void)
 	testparser();
 	testflash();
 	testcommands();
+	testyankflash();
 	testreflow();
 	testexternalpipe();
 	puts("headless terminal tests passed");

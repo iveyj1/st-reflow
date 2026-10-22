@@ -280,6 +280,8 @@ copyoperator(enum copymode_action op, CRange range)
 {
 	char *s;
 	CPos swap;
+	CRange existing;
+	int flash = !copyvisual && !termrange(&existing);
 	int type = range.kind == M_RECT ? SEL_RECTANGULAR : SEL_REGULAR;
 
 	if (op != COPY_YANK && op != COPY_YANK_CLEAN)
@@ -310,6 +312,8 @@ copyoperator(enum copymode_action op, CRange range)
 		seltrimtrailingws(s);
 	xsetsel(s);
 	xclipcopy();
+	if (flash)
+		yankflashstart();
 	selclear();
 	return 1;
 }
@@ -405,6 +409,7 @@ copymode(const Arg *arg)
 		copymodeaction(COPY_EXIT, 1);
 		return;
 	}
+	yankflashcancel();
 	copyparserreset();
 	copyactive = 1;
 	copyvisual = COPY_NONE;
